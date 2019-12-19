@@ -217,57 +217,13 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
     return iterator
 
 
-# def merge_input_attrs(backbone_attr, task_attrs, insert_taskid=True, insert_batchsize=True, insert_seqlen=True, insert_batchsize_x_seqlen=True):
-#     """
-#     Args:
-#         task_attrs(list[dict]|dict): task input attributes, key=attr_name, val=[shape, dtype], support single task and nested tasks
-#     """
-#     if isinstance(task_attrs, dict):
-#         task_attrs = [task_attrs]
-
-#     ret = []
-#     names = []
-#     start = 0
-#     if insert_taskid:
-#         ret.append(([1, 1], 'int64'))
-#         names.append('__task_id')
-#         start += 1
-    
-#     if insert_batchsize:
-#         ret.append(([1], 'int64'))
-#         names.append('batch_size')
-#         start += 1
-
-#     if insert_seqlen:
-#         ret.append(([1], 'int64'))
-#         names.append('seqlen')
-#         start += 1
-
-#     if insert_batchsize_x_seqlen:
-#         ret.append(([1], 'int64'))
-#         names.append(u'batchsize_x_seqlen')
-#         start += 1
-        
-#     names += sorted(backbone_attr.keys())
-#     ret.extend([backbone_attr[k] for k in names[start:]])
-#     name_to_position = {}
-#     # pos=0 is for task_id, thus we start from 1
-#     for pos, k in enumerate(names):
-#         name_to_position[k] = pos
-#     for task_attr in task_attrs:
-#         task_names = sorted(task_attr.keys())
-#         names.extend(task_names)
-#         ret.extend([task_attr[k] for k in task_names])
-#         for pos, k in enumerate(task_names, start=len(name_to_position)):
-#             name_to_position[k] = pos
-#     return names, ret, name_to_position
-def merge_input_attrs(backbone_attr, insert_taskid=True, insert_batchsize=True, insert_seqlen=True, insert_batchsize_x_seqlen=True):
+def merge_input_attrs(backbone_attr, task_attrs, insert_taskid=True, insert_batchsize=True, insert_seqlen=True, insert_batchsize_x_seqlen=True):
     """
     Args:
         task_attrs(list[dict]|dict): task input attributes, key=attr_name, val=[shape, dtype], support single task and nested tasks
     """
-    # if isinstance(task_attrs, dict):
-    #     task_attrs = [task_attrs]
+    if isinstance(task_attrs, dict):
+        task_attrs = [task_attrs]
 
     ret = []
     names = []
@@ -298,12 +254,56 @@ def merge_input_attrs(backbone_attr, insert_taskid=True, insert_batchsize=True, 
     # pos=0 is for task_id, thus we start from 1
     for pos, k in enumerate(names):
         name_to_position[k] = pos
-    # for task_attr in task_attrs:
-    #     task_names = sorted(task_attr.keys())
-        # names.extend(task_names)
-        # ret.extend([task_attr[k] for k in task_names])
-        # for pos, k in enumerate(task_names, start=len(name_to_position)):
-        #     name_to_position[k] = pos
+    for task_attr in task_attrs:
+        task_names = sorted(task_attr.keys())
+        names.extend(task_names)
+        ret.extend([task_attr[k] for k in task_names])
+        for pos, k in enumerate(task_names, start=len(name_to_position)):
+            name_to_position[k] = pos
     return names, ret, name_to_position
+# def merge_input_attrs(backbone_attr, tas insert_taskid=True, insert_batchsize=True, insert_seqlen=True, insert_batchsize_x_seqlen=True):
+#     """
+#     Args:
+#         task_attrs(list[dict]|dict): task input attributes, key=attr_name, val=[shape, dtype], support single task and nested tasks
+#     """
+#     # if isinstance(task_attrs, dict):
+#     #     task_attrs = [task_attrs]
+
+#     ret = []
+#     names = []
+#     start = 0
+#     if insert_taskid:
+#         ret.append(([1, 1], 'int64'))
+#         names.append('__task_id')
+#         start += 1
+    
+#     if insert_batchsize:
+#         ret.append(([1], 'int64'))
+#         names.append('batch_size')
+#         start += 1
+
+#     if insert_seqlen:
+#         ret.append(([1], 'int64'))
+#         names.append('seqlen')
+#         start += 1
+
+#     if insert_batchsize_x_seqlen:
+#         ret.append(([1], 'int64'))
+#         names.append(u'batchsize_x_seqlen')
+#         start += 1
+        
+#     names += sorted(backbone_attr.keys())
+#     ret.extend([backbone_attr[k] for k in names[start:]])
+#     name_to_position = {}
+#     # pos=0 is for task_id, thus we start from 1
+#     for pos, k in enumerate(names):
+#         name_to_position[k] = pos
+#     # for task_attr in task_attrs:
+#     #     task_names = sorted(task_attr.keys())
+#         # names.extend(task_names)
+#         # ret.extend([task_attr[k] for k in task_names])
+#         # for pos, k in enumerate(task_names, start=len(name_to_position)):
+#         #     name_to_position[k] = pos
+#     return names, ret, name_to_position
     
 

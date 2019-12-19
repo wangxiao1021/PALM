@@ -345,7 +345,7 @@ class Controller(object):
 
         # create reader, task
         # then check i/o across reader, backbone and task_layer
-        task_attrs = []
+        task_attrs = []   # 改成当前任务的
         pred_task_attrs = []
         for inst in instances:
             train_reader = inst.Reader(inst.config, phase='train')
@@ -370,12 +370,14 @@ class Controller(object):
                 _check_io(pred_backbone.inputs_attr, pred_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.pred')
                 _check_io(pred_parad.inputs_attrs['reader'], pred_reader.outputs_attr, in_name='task_paradigm.pred.reader', out_name='reader.pred')
                 _check_io(pred_parad.inputs_attrs['backbone'], pred_backbone.outputs_attr, in_name='task_paradigm.pred.backbone', out_name=bb_name+'_backbone')
+        
+
 
         # merge reader input attrs from backbone and task_instances
-        # joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr, task_attrs) # merge input 已经改过
-        joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr)
-        pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
-        # pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, pred_task_attrs, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
+        joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr, task_attrs_cur) # merge input 已经改过
+        # joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr)
+        # pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
+        pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, pred_task_attrs_cur, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
        
         # shapes: [task_id, shapes_of_backbone, shapes_of_inst1, ..., shapes_of_instN]
 
@@ -403,10 +405,13 @@ class Controller(object):
             mrs.append(inst.mix_ratio)
 
         # joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
-        single_it_iterator_fn = create_joint_iterator_fn(iterators, prefixes, single_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
+        joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
    
+        # mergeinputs的时候冲突的解决  ==>  前缀  之后用的时候按前缀取
+
         input_attrs = [[i, j, k] for i, (j,k) in zip(joint_input_names, joint_shape_and_dtypes)]
         pred_input_attrs = [[i, j, k] for i, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
+        # ==== for all task
         net_inputs = create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3)
   
         # build backbone and task layers
@@ -434,7 +439,7 @@ class Controller(object):
             scope = inst.task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
                
-                output_vars = inst.build_task_layer(task_inputs, phase='train', scope=scope)
+                output_vars = inst.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
                 output_vars = {inst.name+'/'+key: val for key, val in output_vars.items()}
                 old = len(task_output_vars) # for debug
                 task_output_vars.update(output_vars)
@@ -449,17 +454,73 @@ class Controller(object):
                     with fluid.unique_name.guard(scope):
                         inst.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
 
+#adddddddd
+        task_inputs = {'backbone': bb_output_vars}
+        def cls_1():
+            return cls_loss
+
+        def match_2():
+            return match_loss
+
+        def mlm_3():
+            return mlm_loss
+        
+        def mrc_4():
+            return mrc_loss
+        
+        def ner_5():
+            return ner_loss
+
+        cls_index = layers.fill_constant(shape=[1], dtype='int32', value=1)
+        match_index = layers.fill_constant(shape=[1], dtype='int32', value=2)
+        mlm_index = layers.fill_constant(shape=[1], dtype='int32', value=3)
+        mrc_index = layers.fill_constant(shape=[1], dtype='int32', value=4)
+        ner_index = layers.fill_constant(shape=[1], dtype='int32', value=5)
+        task_fns = {1: cls_1, 2: match_2, 3: mlm_3, 4: mrc_4, 5: ner_5}
+
+        inst_index = {}
+        for inst in instances:
+            if inst.reader_name == 'cls':
+                inst_index[inst.name]=cls_index
+            elif inst.reader_name == 'match':
+                inst_index[inst.name]=match_index
+            elif inst.reader_name == 'mlm':
+                inst_index[inst.name]=mlm_index
+            elif inst.reader_name == 'mrc':
+                inst_index[inst.name]=mrc_index
+            elif inst.reader_name == 'ner':
+                inst_index[inst.name]=ner_index
+        
+#????
+        for inst in instances:
+            task_loss[inst.name] = layers.switch_case(
+                branch_index=inst_index[inst.name],
+                branch_fns=task_fns
+            )
 
         bb_fetches = {k: v.name for k,v in bb_output_vars.items()}
+        #  task fetches 分开
         task_fetches = {k: v.name for k,v in task_output_vars.items()}
         fetches = task_fetches
         fetches['__task_id'] = net_inputs['__task_id'].name
 
         # compute loss
         task_id_var = net_inputs['__task_id']
-        task_id_vec = fluid.one_hot(task_id_var, num_instances)
-        losses = fluid.layers.concat([task_output_vars[inst.name+'/loss'] for inst in instances], axis=0)
-        loss = layers.reduce_sum(task_id_vec * losses)
+        net_task_id = np.squeeze(net_outputs['__task_id']).tolist()
+        net_task_id = net_task_id[0] if isinstance(rt_task_id, list) else rt_task_id #这个是一个数字
+        cur_task = instances[rt_task_id] # 一个任务实例， 可以取cur_task_name计算loss
+        #add
+
+        # task_id_vec = fluid.one_hot(task_id_var, num_instances) #no
+        # 这里的loss哪来的
+        loss = layers.switch_case(
+                branch_index=inst_index[cur_task],
+                branch_fns=task_fns
+            )
+        # losses = layers.reduce_sum([task_output_vars[inst.name+'/loss'] for inst in instances])
+        # loss = fluid.data(name='x', shape=[1], dtype='float32')
+        # losses = fluid.layers.concat([task_output_vars[inst.name+'/loss'] for inst in instances], axis=0)
+        # loss = layers.reduce_sum(task_id_vec * losses)
 
         main_reader = main_inst.reader['train']
 
@@ -583,12 +644,15 @@ class Controller(object):
             rt_outputs = self.exe.run(train_program, fetch_list=fetch_list)
             rt_outputs = {k:v for k,v in zip(fetch_names, rt_outputs)}
             rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
-            rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id
-            cur_task = instances[rt_task_id]
-
+            rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id #这个是一个数字
+            cur_task = instances[rt_task_id] # 一个任务实例， 可以取cur_task_name计算loss
+            
+            #涉及到backbone的不用管
             backbone_rt_outputs = {k:v for k,v in rt_outputs.items() if '/' not in k}
             backbone_buffer.append(backbone.postprocess(backbone_rt_outputs))
-            
+
+
+            # 当前任务的输出            
             task_rt_outputs = {k[len(cur_task.name+'/'):]: v for k,v in rt_outputs.items() if k.startswith(cur_task.name+'/')}
             instances[rt_task_id].task_layer['train'].postprocess(task_rt_outputs)
 
@@ -653,6 +717,8 @@ class Controller(object):
         print('predicting...')
         mapper = {k:v for k,v in inst.pred_input}
         buf = []
+
+        # feed 肯定不是给所有数据
         for feed in inst.reader['pred'].iterator():
             feed = _encode_inputs(feed, inst.name, cand_set=mapper)
             feed = {mapper[k]: v for k,v in feed.items()}

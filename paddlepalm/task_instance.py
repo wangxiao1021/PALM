@@ -38,6 +38,7 @@ class TaskInstance(object):
         check_req_args(config, name)
 
         # parse Reader and Paradigm
+        self._reader_name = config['reader']
         reader_name = config['reader']
         reader_mod = importlib.import_module(READER_DIR + '.' + reader_name)
         Reader = getattr(reader_mod, 'Reader')
@@ -166,6 +167,10 @@ class TaskInstance(object):
     @property
     def reader(self):
         return self._reader
+    
+    @property
+    def reader_name(self):
+        return self._reader_name
 
     @property
     def pred_input(self):
