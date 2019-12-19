@@ -494,7 +494,7 @@ class Controller(object):
         task_index['mrc'] = mrc_task
         task_index['ner'] = ner_task
         cur_task_name = ''
-        cur_task = null
+        cur_task = TaskInstance(cur_task_name, instname_to_id[cur_task_name], instname_to_conf[cur_task_name])
 
         def cls_1():
 
