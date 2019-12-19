@@ -456,41 +456,186 @@ class Controller(object):
 
 #adddddddd
         task_inputs = {'backbone': bb_output_vars}
-        def cls_1():
-            return cls_loss
-
-        def match_2():
-            return match_loss
-
-        def mlm_3():
-            return mlm_loss
         
-        def mrc_4():
-            return mrc_loss
-        
-        def ner_5():
-            return ner_loss
 
         cls_index = layers.fill_constant(shape=[1], dtype='int32', value=1)
         match_index = layers.fill_constant(shape=[1], dtype='int32', value=2)
         mlm_index = layers.fill_constant(shape=[1], dtype='int32', value=3)
         mrc_index = layers.fill_constant(shape=[1], dtype='int32', value=4)
         ner_index = layers.fill_constant(shape=[1], dtype='int32', value=5)
-        task_fns = {1: cls_1, 2: match_2, 3: mlm_3, 4: mrc_4, 5: ner_5}
-
+   
         inst_index = {}
+        task_index = {}
+        cls_task = []
+        match_task = []
+        mlm_task = []
+        mrc_task = []
+        ner_task = []
         for inst in instances:
             if inst.reader_name == 'cls':
                 inst_index[inst.name]=cls_index
+                cls_task.append(inst.name)
             elif inst.reader_name == 'match':
                 inst_index[inst.name]=match_index
+                match_task.append(inst.name)
             elif inst.reader_name == 'mlm':
                 inst_index[inst.name]=mlm_index
+                mlm_task.append(inst.name)
             elif inst.reader_name == 'mrc':
                 inst_index[inst.name]=mrc_index
+                mrc_task.append(inst.name)
             elif inst.reader_name == 'ner':
                 inst_index[inst.name]=ner_index
+                ner_task.append(inst.name)
+
+        task_index['cls'] = cls_task
+        task_index['match'] = match_task
+        task_index['mlm'] = mlm_task
+        task_index['mrc'] = mrc_task
+        task_index['ner'] = ner_task
+        cur_task_name = ''
+        cur_task = null
+
+        def cls_1():
+
+            task_output_vars = {}
+            task_inputs = {'backbone': bb_output_vars}
+            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
+            task_inputs['reader'] = task_inputs_from_reader
+       
+            scope = cur_task.task_reuse_scope + '/'
+            with fluid.unique_name.guard(scope):
+               
+                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
+                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
+                # old = len(task_output_vars) # for debug
+                # task_output_vars.update(output_vars)
+                # assert len(task_output_vars) - old == len(output_vars) # for debug
+            # prepare predict vars for saving inference model
+            if cur_task.is_target:
+                with fluid.program_guard(pred_prog, pred_init_prog):
+                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
+                    cur_task.pred_input = cur_inputs
+                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
+                    scope = cur_task.task_reuse_scope + '/'
+                    with fluid.unique_name.guard(scope):
+                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+
+            return [task_output_vars[cur_task_name+'/loss']]
+            # return cls_loss
+
+        def match_2():
+            task_output_vars = {}
+            task_inputs = {'backbone': bb_output_vars}
+            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
+            task_inputs['reader'] = task_inputs_from_reader
+       
+            scope = cur_task.task_reuse_scope + '/'
+            with fluid.unique_name.guard(scope):
+               
+                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
+                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
+                # old = len(task_output_vars) # for debug
+                # task_output_vars.update(output_vars)
+                # assert len(task_output_vars) - old == len(output_vars) # for debug
+            # prepare predict vars for saving inference model
+            if cur_task.is_target:
+                with fluid.program_guard(pred_prog, pred_init_prog):
+                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
+                    cur_task.pred_input = cur_inputs
+                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
+                    scope = cur_task.task_reuse_scope + '/'
+                    with fluid.unique_name.guard(scope):
+                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+
+            return [task_output_vars[cur_task_name+'/loss']]
+            # return match_loss
+
+        def mlm_3():
+            task_output_vars = {}
+            task_inputs = {'backbone': bb_output_vars}
+            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
+            task_inputs['reader'] = task_inputs_from_reader
+       
+            scope = cur_task.task_reuse_scope + '/'
+            with fluid.unique_name.guard(scope):
+               
+                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
+                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
+                # old = len(task_output_vars) # for debug
+                # task_output_vars.update(output_vars)
+                # assert len(task_output_vars) - old == len(output_vars) # for debug
+            # prepare predict vars for saving inference model
+            if cur_task.is_target:
+                with fluid.program_guard(pred_prog, pred_init_prog):
+                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
+                    cur_task.pred_input = cur_inputs
+                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
+                    scope = cur_task.task_reuse_scope + '/'
+                    with fluid.unique_name.guard(scope):
+                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+
+            return [task_output_vars[cur_task_name+'/loss']]
+            # return mlm_loss
         
+        def mrc_4():
+            task_output_vars = {}
+            task_inputs = {'backbone': bb_output_vars}
+            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
+            task_inputs['reader'] = task_inputs_from_reader
+       
+            scope = cur_task.task_reuse_scope + '/'
+            with fluid.unique_name.guard(scope):
+               
+                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
+                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
+                # old = len(task_output_vars) # for debug
+                # task_output_vars.update(output_vars)
+                # assert len(task_output_vars) - old == len(output_vars) # for debug
+            # prepare predict vars for saving inference model
+            if cur_task.is_target:
+                with fluid.program_guard(pred_prog, pred_init_prog):
+                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
+                    cur_task.pred_input = cur_inputs
+                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
+                    scope = cur_task.task_reuse_scope + '/'
+                    with fluid.unique_name.guard(scope):
+                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+
+            return [task_output_vars[cur_task_name+'/loss']]
+            # return mrc_loss
+        
+        def ner_5():
+            task_output_vars = {}
+            task_inputs = {'backbone': bb_output_vars}
+            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
+            task_inputs['reader'] = task_inputs_from_reader
+       
+            scope = cur_task.task_reuse_scope + '/'
+            with fluid.unique_name.guard(scope):
+               
+                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
+                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
+                # old = len(task_output_vars) # for debug
+                # task_output_vars.update(output_vars)
+                # assert len(task_output_vars) - old == len(output_vars) # for debug
+            # prepare predict vars for saving inference model
+            if cur_task.is_target:
+                with fluid.program_guard(pred_prog, pred_init_prog):
+                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
+                    cur_task.pred_input = cur_inputs
+                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
+                    scope = cur_task.task_reuse_scope + '/'
+                    with fluid.unique_name.guard(scope):
+                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+
+            return [task_output_vars[cur_task_name+'/loss']]
+            # return ner_loss
+
+
+        
+        task_fns = {1: cls_1, 2: match_2, 3: mlm_3, 4: mrc_4, 5: ner_5}
+
 #????
         for inst in instances:
             task_loss[inst.name] = layers.switch_case(
@@ -505,16 +650,18 @@ class Controller(object):
         fetches['__task_id'] = net_inputs['__task_id'].name
 
         # compute loss
-        task_id_var = net_inputs['__task_id']
+        # task_id_var = net_inputs['__task_id']
         net_task_id = np.squeeze(net_outputs['__task_id']).tolist()
-        net_task_id = net_task_id[0] if isinstance(rt_task_id, list) else rt_task_id #这个是一个数字
-        cur_task = instances[rt_task_id] # 一个任务实例， 可以取cur_task_name计算loss
+        net_task_id = net_task_id[0] if isinstance(net_task_id, list) else net_task_id #这个是一个数字
+        cur_task = instances[net_task_id] # 一个任务实例， 可以取cur_task_name计算loss
+        cur_task_name = cur_task.name
         #add
 
         # task_id_vec = fluid.one_hot(task_id_var, num_instances) #no
         # 这里的loss哪来的
+        # 算单任务的loss 这里应该没问题
         loss = layers.switch_case(
-                branch_index=inst_index[cur_task],
+                branch_index=inst_index[cur_task_name],
                 branch_fns=task_fns
             )
         # losses = layers.reduce_sum([task_output_vars[inst.name+'/loss'] for inst in instances])
