@@ -93,7 +93,7 @@ def create_iterator_fn(iterator, iterator_prefix, shape_and_dtypes, outname_to_p
             results = _zero_batch(shape_and_dtypes)
 
             outputs = next(iterator) # dict type
-            prefix = iterator_prefixe
+            prefix = iterator_prefix
             for outname, val in outputs.items():
                 task_outname = prefix + '/' + outname
 
@@ -118,38 +118,40 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
     """
 
     task_ids = range(len(iterators))
+    print('---tag---task_ids')
+    print(task_ids)
     weights = [mr / float(sum(mrs)) for mr in mrs]
     if not keep_one_task:
         dev_count = 1
 
-    results = _zero_batch(joint_shape_and_dtypes)
-    outbuf = {}
-    for id in task_ids:
-        outputs = next(iterators[id]) # dict type
-        outbuf[id] = outputs
-        prefix = iterator_prefixes[id]
-        for outname, val in outputs.items():
-            task_outname = prefix + '/' + outname
+    results = _zero_batch(joint_shape_and_dtypes) 
+    # outbuf = {}  #之后的这一段填充的应该都不要
+    # for id in task_ids:
+    #     outputs = next(iterators[id]) # dict type
+    #     outbuf[id] = outputs
+    #     prefix = iterator_prefixes[id]
+    #     for outname, val in outputs.items():
+    #         task_outname = prefix + '/' + outname
 
-            if outname in outname_to_pos:
-                idx = outname_to_pos[outname]
-                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=outname+': ')
-                results[idx] = val
+    #         if outname in outname_to_pos:
+    #             idx = outname_to_pos[outname]
+    #             val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=outname+': ')
+    #             results[idx] = val
 
-            if task_outname in outname_to_pos:
-                idx = outname_to_pos[task_outname]
-                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=task_outname+': ')
-                results[idx] = val
+    #         if task_outname in outname_to_pos:
+    #             idx = outname_to_pos[task_outname]
+    #             val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=task_outname+': ')
+    #             results[idx] = val
 
-    fake_batch = results
-    dev_count_bak = dev_count
+    # fake_batch = results
+    # dev_count_bak = dev_count
 
     def iterator():
         v = verbose
         has_show_warn = False
         while True:
             id = np.random.choice(task_ids, p=weights)
-            results = fake_batch
+            # results = fake_batch
             if v > 0:
                 print('----- debug joint iterator -----')
                 print('sampled task id: '+str(id))
@@ -160,11 +162,12 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                 results[outname_to_pos['__task_id']] = task_id_tensor
                 assert outname_to_pos['__task_id'] == 0
 
-                if id in outbuf:
-                    outputs = outbuf[id]
-                    del outbuf[id]
-                else:
-                    outputs = next(iterators[id]) # dict type
+                # if id in outbuf:
+                #     outputs = outbuf[id]
+                #     del outbuf[id]
+                # else:
+                #     outputs = next(iterators[id]) # dict type
+                outputs = next(iterators[id])
 
                 if 'token_ids' in outputs:
                     val1 = len(outputs['token_ids'])
@@ -214,13 +217,57 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
     return iterator
 
 
-def merge_input_attrs(backbone_attr, task_attrs, insert_taskid=True, insert_batchsize=True, insert_seqlen=True, insert_batchsize_x_seqlen=True):
+# def merge_input_attrs(backbone_attr, task_attrs, insert_taskid=True, insert_batchsize=True, insert_seqlen=True, insert_batchsize_x_seqlen=True):
+#     """
+#     Args:
+#         task_attrs(list[dict]|dict): task input attributes, key=attr_name, val=[shape, dtype], support single task and nested tasks
+#     """
+#     if isinstance(task_attrs, dict):
+#         task_attrs = [task_attrs]
+
+#     ret = []
+#     names = []
+#     start = 0
+#     if insert_taskid:
+#         ret.append(([1, 1], 'int64'))
+#         names.append('__task_id')
+#         start += 1
+    
+#     if insert_batchsize:
+#         ret.append(([1], 'int64'))
+#         names.append('batch_size')
+#         start += 1
+
+#     if insert_seqlen:
+#         ret.append(([1], 'int64'))
+#         names.append('seqlen')
+#         start += 1
+
+#     if insert_batchsize_x_seqlen:
+#         ret.append(([1], 'int64'))
+#         names.append(u'batchsize_x_seqlen')
+#         start += 1
+        
+#     names += sorted(backbone_attr.keys())
+#     ret.extend([backbone_attr[k] for k in names[start:]])
+#     name_to_position = {}
+#     # pos=0 is for task_id, thus we start from 1
+#     for pos, k in enumerate(names):
+#         name_to_position[k] = pos
+#     for task_attr in task_attrs:
+#         task_names = sorted(task_attr.keys())
+#         names.extend(task_names)
+#         ret.extend([task_attr[k] for k in task_names])
+#         for pos, k in enumerate(task_names, start=len(name_to_position)):
+#             name_to_position[k] = pos
+#     return names, ret, name_to_position
+def merge_input_attrs(backbone_attr, insert_taskid=True, insert_batchsize=True, insert_seqlen=True, insert_batchsize_x_seqlen=True):
     """
     Args:
         task_attrs(list[dict]|dict): task input attributes, key=attr_name, val=[shape, dtype], support single task and nested tasks
     """
-    if isinstance(task_attrs, dict):
-        task_attrs = [task_attrs]
+    # if isinstance(task_attrs, dict):
+    #     task_attrs = [task_attrs]
 
     ret = []
     names = []
@@ -251,12 +298,12 @@ def merge_input_attrs(backbone_attr, task_attrs, insert_taskid=True, insert_batc
     # pos=0 is for task_id, thus we start from 1
     for pos, k in enumerate(names):
         name_to_position[k] = pos
-    for task_attr in task_attrs:
-        task_names = sorted(task_attr.keys())
-        names.extend(task_names)
-        ret.extend([task_attr[k] for k in task_names])
-        for pos, k in enumerate(task_names, start=len(name_to_position)):
-            name_to_position[k] = pos
+    # for task_attr in task_attrs:
+    #     task_names = sorted(task_attr.keys())
+        # names.extend(task_names)
+        # ret.extend([task_attr[k] for k in task_names])
+        # for pos, k in enumerate(task_names, start=len(name_to_position)):
+        #     name_to_position[k] = pos
     return names, ret, name_to_position
     
 
