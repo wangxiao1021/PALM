@@ -117,6 +117,7 @@ def _check_io(in_attr, out_attr, strict=False, in_name="left", out_name="right")
                 logging.warning('{}: shape or dtype not consistent!\n{}:\n{}\n{}:\n{}'.format(name, in_name, attr, out_name, out_attr[name]))
 
 
+# 调用时只merge config.yaml和当前任务的config   conf1 优先级高，是特定任务的conf
 def _merge_conf(conf1, conf2, conf1_first=True, strict=False):
     assert isinstance(conf1, dict), "{} is not a dict.".format(conf1)
     assert isinstance(conf2, dict), "{} is not a dict.".format(conf2)
@@ -135,7 +136,7 @@ def _merge_conf(conf1, conf2, conf1_first=True, strict=False):
         base_conf[k] = v
     return base_conf
 
-
+# 给所有inputs加上一个scope name
 def _encode_inputs(inputs, scope_name, sep='/', cand_set=None):
     outputs = {}
     for k, v in inputs.items():
@@ -148,7 +149,7 @@ def _encode_inputs(inputs, scope_name, sep='/', cand_set=None):
             outputs[scope_name+sep+k] = v
     return outputs
 
-
+# ??
 def _decode_inputs(inputs, scope_name, sep='/', keep_unk_keys=True):
     outputs = {}
     for name, value in inputs.items():
@@ -157,7 +158,7 @@ def _decode_inputs(inputs, scope_name, sep='/', keep_unk_keys=True):
             outputs[name] = value
         # var for this inst
         if name.startswith(scope_name+'/'):
-            outputs[name[len(scope_name+'/'):]] = value
+            outputs[name[len(scope_name+'/'):]] = value   #?
     return outputs
 
 
@@ -214,8 +215,9 @@ class Controller(object):
         num_instances = len(instnames)
         self.num_instances = num_instances
 
-        instname_to_conf = {}
-        instname_to_id = {}
+        self.instname_to_conf = {}
+        self.instname_to_id = {}
+        # 这里要分开 
         for id, instname in enumerate(instnames):
             instpath = os.path.join(task_dir, instname+'.yaml')
             conf = _parse_yaml(instpath, support_cmd_line=False)
@@ -225,8 +227,8 @@ class Controller(object):
             print_dict(temp_conf, title='{} configuration'.format(instname))
             conf = _merge_conf(mtl_conf, conf)
             
-            instname_to_conf[instname] = conf
-            instname_to_id[instname] = id
+            self.instname_to_conf[instname] = conf
+            self.instname_to_id[instname] = id
 
         # prepare backbone
         if 'backbone_config_path' in mtl_conf:
@@ -243,7 +245,7 @@ class Controller(object):
         # create task instances
         instances = []
         for name in instnames:
-            instances.append(TaskInstance(name, instname_to_id[name], instname_to_conf[name]))
+            instances.append(TaskInstance(name, self.instname_to_id[name], self.instname_to_conf[name]))
 
         check_instances(instances)
 
@@ -372,7 +374,7 @@ class Controller(object):
                 _check_io(pred_parad.inputs_attrs['backbone'], pred_backbone.outputs_attr, in_name='task_paradigm.pred.backbone', out_name=bb_name+'_backbone')
         
 
-
+        # 这里就没必要了吧 ？
         # merge reader input attrs from backbone and task_instances
         joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr, task_attrs) # merge input 已经改过
         # joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr)
@@ -397,13 +399,16 @@ class Controller(object):
         # merge dataset iterators and create net input vars
         iterators = []
         prefixes = []
-        mrs = []
 
         for inst in instances:
             iterators.append(inst.reader['train'].iterator())
             prefixes.append(inst.name)
             mrs.append(inst.mix_ratio)
 
+        weights = [mr / float(sum(mrs)) for mr in mrs]
+        task_ids = range(num_instances)
+    
+        # 那输入输出怎么处理呢
         # joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
         joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
    
@@ -493,8 +498,8 @@ class Controller(object):
         task_index['mlm'] = mlm_task
         task_index['mrc'] = mrc_task
         task_index['ner'] = ner_task
-        cur_task_name = ''
-        cur_task = TaskInstance(cur_task_name, instname_to_id[cur_task_name], instname_to_conf[cur_task_name])
+        cur_task_name = 'mrqa'
+        cur_task = TaskInstance(cur_task_name, self.instname_to_id[cur_task_name], self.instname_to_conf[cur_task_name])
 
         def cls_1():
 
@@ -792,7 +797,7 @@ class Controller(object):
             rt_outputs = {k:v for k,v in zip(fetch_names, rt_outputs)}
             rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
             rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id #这个是一个数字
-            cur_task = instances[rt_task_id] # 一个任务实例， 可以取cur_task_name计算loss
+            cur_task = instances[rt_task_id] # 一个任务实例， 可以取cur_task.name计算loss
             
             #涉及到backbone的不用管
             backbone_rt_outputs = {k:v for k,v in rt_outputs.items() if '/' not in k}
@@ -865,7 +870,6 @@ class Controller(object):
         mapper = {k:v for k,v in inst.pred_input}
         buf = []
 
-        # feed 肯定不是给所有数据
         for feed in inst.reader['pred'].iterator():
             feed = _encode_inputs(feed, inst.name, cand_set=mapper)
             feed = {mapper[k]: v for k,v in feed.items()}
