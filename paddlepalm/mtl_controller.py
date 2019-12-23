@@ -347,27 +347,31 @@ class Controller(object):
 
         # create reader, task
         # then check i/o across reader, backbone and task_layer
-        task_attrs = []   # 改成当前任务的
-        pred_task_attrs = []
-        for inst in instances:
-            train_reader = inst.Reader(inst.config, phase='train')
-            inst.reader['train'] = train_reader
-            train_parad = inst.Paradigm(inst.config, phase='train', backbone_config=bb_conf)
-            inst.task_layer['train'] = train_parad
-            task_attr_from_reader = _encode_inputs(train_parad.inputs_attrs['reader'], inst.name)
-            task_attrs.append(task_attr_from_reader)
+        task_attrs = []
+        for i in range(num_instances):
+            task_attrs.append([])
+        # 改成当前任务的
+        pred_task_attrs = []   # 这个就一个，不用像上面那样了吧
+        # for inst in instances:   这边只是check吗
+        for i in range(num_instances):
+            train_reader = instances[i].Reader(instances[i].config, phase='train')
+            instances[i].reader['train'] = train_reader
+            train_parad = instances[i].Paradigm(instances[i].config, phase='train', backbone_config=bb_conf)
+            instances[i].task_layer['train'] = train_parad
+            task_attr_from_reader = _encode_inputs(train_parad.inputs_attrs['reader'], instances[i].name)
+            task_attrs[i].append(task_attr_from_reader)
 
             _check_io(train_backbone.inputs_attr, train_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.train')
             _check_io(train_parad.inputs_attrs['reader'], train_reader.outputs_attr, in_name='task_paradigm.train.reader', out_name='reader.train')
             _check_io(train_parad.inputs_attrs['backbone'], train_backbone.outputs_attr, in_name='task_paradigm.train.backbone', out_name=bb_name+'_backbone')
 
-            if inst.is_target:
-                if 'pred_file' not in inst.config:
-                    inst.config['pred_file'] = ''
-                pred_reader = inst.Reader(inst.config, phase='pred')
-                pred_parad = inst.Paradigm(inst.config, phase='pred', backbone_config=bb_conf)
-                inst.task_layer['pred'] = pred_parad
-                task_attr_from_reader = _encode_inputs(pred_parad.inputs_attrs['reader'], inst.name)
+            if instances[i].is_target:
+                if 'pred_file' not in instances[i].config:
+                    instances[i].config['pred_file'] = ''
+                pred_reader = instances[i].Reader(instances[i].config, phase='pred')
+                pred_parad = instances[i].Paradigm(instances[i].config, phase='pred', backbone_config=bb_conf)
+                instances[i].task_layer['pred'] = pred_parad
+                task_attr_from_reader = _encode_inputs(pred_parad.inputs_attrs['reader'], instances[i].name)
                 pred_task_attrs.append(task_attr_from_reader)
                 _check_io(pred_backbone.inputs_attr, pred_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.pred')
                 _check_io(pred_parad.inputs_attrs['reader'], pred_reader.outputs_attr, in_name='task_paradigm.pred.reader', out_name='reader.pred')
