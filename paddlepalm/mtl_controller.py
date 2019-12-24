@@ -464,7 +464,7 @@ class Controller(object):
             with fluid.unique_name.guard(scope):
                
                 output_vars.append(instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope))   # 分开
-                output_vars[i] = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
+                output_vars[i] = {key: val for key, val in output_vars[i].items()}
                 # old = len(task_output_vars) # for debug
                 # task_output_vars[i].update(output_vars)
                 # assert len(task_output_vars) - old == len(output_vars) # for debug
@@ -526,7 +526,7 @@ class Controller(object):
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [output_vars[i][instances[i].name+'/loss']]
+            return [output_vars[i]['loss']]
             # return cls_loss
 
         def match_loss():
@@ -534,20 +534,20 @@ class Controller(object):
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [output_vars[i][instances[i].name+'/loss']]
+            return [output_vars[i]['loss']]
         def mlm_loss():
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [output_vars[i][instances[i].name+'/loss']]
+            return [output_vars[i]['loss']]
         
         def mrc_loss():
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [output_vars[i][instances[i].name+'/loss']]
+            return [output_vars[i]['loss']]
             # return mrc_loss
         
         def ner_loss():
@@ -555,20 +555,20 @@ class Controller(object):
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [output_vars[i][instances[i].name+'/loss']]
+            return [output_vars[i]['loss']]
 
         task_fns = {}
         for i in range(num_instances):
             if instances[i].reader_name == 'cls':
-                task_fns[i] = cls_loss(instances[i])
+                task_fns[i] = cls_loss(i)
             elif instances[i].reader_name == 'match':
-                task_fns[i] = match_loss(instances[i])
+                task_fns[i] = match_loss(i)
             elif instances[i].reader_name == 'mlm':
-                task_fns[i] = mlm_loss(instances[i])
+                task_fns[i] = mlm_loss(i)
             elif instances[i].reader_name == 'mrc':
-                task_fns[i] = mrc_loss(instances[i])
+                task_fns[i] = mrc_loss(i)
             elif instances[i].reader_name == 'ner':
-                task_fns[i]=ner_loss(instances[i])
+                task_fns[i]=ner_loss(i)
 
 
         task_loss = []
