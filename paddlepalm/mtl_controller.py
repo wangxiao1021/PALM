@@ -585,7 +585,7 @@ class Controller(object):
 
             bb_fetches.append({k: v.name for k,v in bb_output_vars[i].items()})
             #  task fetches 分开
-            task_fetches[i].append({k: v.name for k,v in output_vars[i].items()})
+            task_fetches.append({k: v.name for k,v in output_vars[i].items()})
             fetches.append(task_fetches[i])
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
 
