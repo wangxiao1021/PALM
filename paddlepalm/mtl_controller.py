@@ -572,9 +572,9 @@ class Controller(object):
 
 
         task_loss = []
-        bb_fetches = []
-        task_fetches = []
-        fetches = []
+        bb_fetches = {}
+        task_fetches = {}
+        fetches = {}
         loss = layers.fill_constant(shape=[1], dtype='float32', value=0.0)
         # print("**********")
         # print(task_fns)
@@ -584,10 +584,10 @@ class Controller(object):
             #     branch_fns=task_fns
             # )
 
-            bb_fetches.append({k: v.name for k,v in bb_output_vars[i].items()})
+            bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
             #  task fetches 分开
-            task_fetches.append({k: v.name for k,v in output_vars[i].items()})
-            fetches.append(task_fetches[i])
+            task_fetches[i] = {k: v.name for k,v in output_vars[i].items()}
+            fetches[i] = task_fetches[i]
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
             task_loss[i] = layers.switch_case(
                 branch_index=inst_index[cur_task_name],
