@@ -568,7 +568,7 @@ class Controller(object):
             elif instances[i].reader_name == 'mrc':
                 task_fns[i] = mrc_loss(i)
             elif instances[i].reader_name == 'ner':
-                task_fns[i]=ner_loss(i)
+                task_fns[i] = ner_loss(i)
 
 
         task_loss = []
@@ -578,23 +578,23 @@ class Controller(object):
         print("**********")
         print(task_fns)
         for i in range(num_instances):
-            task_loss[i] = layers.switch_case(
-                branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
-                branch_fns=task_fns
-            )
+            # task_loss[i] = layers.switch_case(
+            #     branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
+            #     branch_fns=task_fns
+            # )
 
-            bb_fetches.append({k: v.name for k,v in bb_output_vars.items()})
+            bb_fetches.append({k: v.name for k,v in bb_output_vars[i].items()})
             #  task fetches 分开
-            task_fetches[i].append({k: v.name for k,v in task_output_vars.items()})
-            fetches.append(task_fetches)
+            task_fetches[i].append({k: v.name for k,v in output_vars[i].items()})
+            fetches.append(task_fetches[i])
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
 
-        # compute loss
-        # task_id_var = net_inputs['__task_id']
-        net_task_id[i] = np.squeeze(net_outputs['__task_id']).tolist()
-        net_task_id[i] = net_task_id[0] if isinstance(net_task_id, list) else net_task_id #这个是一个数字
-        cur_task = instances[net_task_id] # 一个任务实例， 可以取cur_task_name计算loss
-        cur_task_name = cur_task.name
+            # compute loss
+            # task_id_var = net_inputs['__task_id']
+            net_task_id[i] = np.squeeze(net_outputs['__task_id']).tolist()
+            net_task_id[i] = net_task_id[i][0] if isinstance(net_task_id, list) else net_task_id[i] #这个是一个数字
+            cur_task = instances[net_task_id[i]] # 一个任务实例， 可以取cur_task_name计算loss
+            cur_task_name = cur_task.name
         #add
 
         # task_id_vec = fluid.one_hot(task_id_var, num_instances) #no
