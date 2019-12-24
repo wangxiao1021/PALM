@@ -591,7 +591,7 @@ class Controller(object):
 
             # compute loss
             # task_id_var = net_inputs['__task_id']
-            net_task_id[i] = np.squeeze(net_outputs['__task_id']).tolist()
+            net_task_id[i] = np.squeeze(net_outputs[i]['__task_id']).tolist()
             net_task_id[i] = net_task_id[i][0] if isinstance(net_task_id[i], list) else net_task_id[i] #这个是一个数字
             cur_task = instances[net_task_id[i]] # 一个任务实例， 可以取cur_task_name计算loss
             cur_task_name = cur_task.name
