@@ -575,6 +575,8 @@ class Controller(object):
         bb_fetches = []
         task_fetches = []
         fetches = []
+        print("**********")
+        print(task_fns)
         for i in range(num_instances):
             task_loss[i] = layers.switch_case(
                 branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
