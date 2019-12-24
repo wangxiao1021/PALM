@@ -529,20 +529,20 @@ class Controller(object):
             return [output_vars[i]['loss']]
             # return cls_loss
 
-        def match_loss():
+        def match_loss(i):
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
             return [output_vars[i]['loss']]
-        def mlm_loss():
+        def mlm_loss(i):
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
             return [output_vars[i]['loss']]
         
-        def mrc_loss():
+        def mrc_loss(i):
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
@@ -550,7 +550,7 @@ class Controller(object):
             return [output_vars[i]['loss']]
             # return mrc_loss
         
-        def ner_loss():
+        def ner_loss(i):
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
