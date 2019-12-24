@@ -462,8 +462,8 @@ class Controller(object):
             scope = instances[i].task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
                
-                output_vars = instances[i].build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
-                output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
+                output_vars.append(instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope))   # 分开
+                output_vars[i] = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
                 # old = len(task_output_vars) # for debug
                 # task_output_vars[i].update(output_vars)
                 # assert len(task_output_vars) - old == len(output_vars) # for debug
@@ -525,7 +525,7 @@ class Controller(object):
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [task_output_vars[instances[i].name+'/loss']]
+            return [output_vars[i][instances[i].name+'/loss']]
             # return cls_loss
 
         def match_loss():
@@ -533,20 +533,20 @@ class Controller(object):
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [task_output_vars[instances[i].name+'/loss']]
+            return [output_vars[i][instances[i].name+'/loss']]
         def mlm_loss():
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [task_output_vars[instances[i].name+'/loss']]
+            return [output_vars[i][instances[i].name+'/loss']]
         
         def mrc_loss():
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [task_output_vars[instances[i].name+'/loss']]
+            return [output_vars[i][instances[i].name+'/loss']]
             # return mrc_loss
         
         def ner_loss():
@@ -554,7 +554,7 @@ class Controller(object):
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [task_output_vars[instances[i].name+'/loss']]
+            return [output_vars[i][instances[i].name+'/loss']]
 
         task_fns = {}
         for i in range(num_instances):
