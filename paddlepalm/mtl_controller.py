@@ -572,8 +572,8 @@ class Controller(object):
 
 
         task_loss = []
-        bb_fetches = {}
-        task_fetches = {}
+        bb_fetches = []
+        task_fetches = []
         fetches = []
         loss = layers.fill_constant(shape=[1], dtype='float32', value=0.0)
         # print("**********")
