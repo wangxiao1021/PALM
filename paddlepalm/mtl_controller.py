@@ -455,7 +455,7 @@ class Controller(object):
         task_output_vars = {}
         task_inputs = []
         for i in range(num_instances):
-            task_inputs.append( {'backbone': bb_output_vars{[i]})
+            task_inputs.append( {'backbone': bb_output_vars[i]})
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
             task_inputs[i]['reader'] = task_inputs_from_reader
        
