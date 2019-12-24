@@ -429,7 +429,7 @@ class Controller(object):
         net_inputs = []
         for p in range(num_instances):
             input_attrs.append([[i, j, k] for i, (j,k) in zip(joint_input_names[p], joint_shape_and_dtypes[p])])
-            net_inputs.append(create_net_inputs(input_attrs[i], async=True, iterator_fn=instances[p].reader['train'].iterator(), dev_count=dev_count, n_prefetch=3))
+            net_inputs.append(create_net_inputs(input_attrs[p], async=True, iterator_fn=instances[p].reader['train'].iterator(), dev_count=dev_count, n_prefetch=3))
         pred_input_attrs = [[i, j, k] for i, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
         # ==== for all task
         
