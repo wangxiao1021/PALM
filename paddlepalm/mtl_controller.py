@@ -560,23 +560,23 @@ class Controller(object):
         task_fns = {}
         for i in range(num_instances):
             if instances[i].reader_name == 'cls':
-                task_fns[i] = cls_loss(i)
+                task_fns[i] = lambda: cls_loss(i)
             elif instances[i].reader_name == 'match':
-                task_fns[i] = match_loss(i)
+                task_fns[i] = lambda: match_loss(i)
             elif instances[i].reader_name == 'mlm':
-                task_fns[i] = mlm_loss(i)
+                task_fns[i] = lambda: mlm_loss(i)
             elif instances[i].reader_name == 'mrc':
-                task_fns[i] = mrc_loss(i)
+                task_fns[i] = lambda: mrc_loss(i)
             elif instances[i].reader_name == 'ner':
-                task_fns[i] = ner_loss(i)
+                task_fns[i] = lambda: ner_loss(i)
 
 
         task_loss = []
         bb_fetches = []
         task_fetches = []
         fetches = []
-        print("**********")
-        print(task_fns)
+        # print("**********")
+        # print(task_fns)
         for i in range(num_instances):
             # task_loss[i] = layers.switch_case(
             #     branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
