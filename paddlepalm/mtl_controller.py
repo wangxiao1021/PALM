@@ -572,9 +572,10 @@ class Controller(object):
 
 
         task_loss = []
-        bb_fetches = []
-        task_fetches = []
+        bb_fetches = {}
+        task_fetches = {}
         fetches = []
+        loss = layers.fill_constant(shape=[1], dtype='float32', value=0.0)
         # print("**********")
         # print(task_fns)
         for i in range(num_instances):
@@ -583,27 +584,35 @@ class Controller(object):
             #     branch_fns=task_fns
             # )
 
-            bb_fetches.append({k: v.name for k,v in bb_output_vars[i].items()})
+            bb_fetches.update({k: v.name for k,v in bb_output_vars[i].items()})
             #  task fetches 分开
-            task_fetches.append({k: v.name for k,v in output_vars[i].items()})
+            task_fetches.update({k: v.name for k,v in output_vars[i].items()})
             fetches.append(task_fetches[i])
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
+            task_loss[i] = layers.switch_case(
+                branch_index=inst_index[cur_task_name],
+                branch_fns=task_fns
+            )
+            # loss 本来就是一个数
+            loss = fluid.layers.elementwise_add(loss, task_loss[i])
+            
 
             # compute loss
             # task_id_var = net_inputs['__task_id']
-            net_task_id[i] = np.squeeze(net_outputs[i]['__task_id']).tolist()
-            net_task_id[i] = net_task_id[i][0] if isinstance(net_task_id[i], list) else net_task_id[i] #这个是一个数字
-            cur_task = instances[net_task_id[i]] # 一个任务实例， 可以取cur_task_name计算loss
-            cur_task_name = cur_task.name
+
+
+            # 看一下net_outputs 在哪里定义的？？？？
+
+            # net_task_id[i] = np.squeeze(net_outputs[i]['__task_id']).tolist()
+            # net_task_id[i] = net_task_id[i][0] if isinstance(net_task_id[i], list) else net_task_id[i] #这个是一个数字
+            # cur_task = instances[net_task_id[i]] # 一个任务实例， 可以取cur_task_name计算loss
+            # cur_task_name = cur_task.name
         #add
 
         # task_id_vec = fluid.one_hot(task_id_var, num_instances) #no
         # 这里的loss哪来的
         # 算单任务的loss 这里应该没问题
-        loss = layers.switch_case(
-                branch_index=inst_index[cur_task_name],
-                branch_fns=task_fns
-            )
+        
         # losses = layers.reduce_sum([task_output_vars[inst.name+'/loss'] for inst in instances])
         # loss = fluid.data(name='x', shape=[1], dtype='float32')
         # losses = fluid.layers.concat([task_output_vars[inst.name+'/loss'] for inst in instances], axis=0)
