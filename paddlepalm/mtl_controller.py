@@ -590,7 +590,7 @@ class Controller(object):
             fetches[i] = task_fetches[i]
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
             task_loss[i] = layers.switch_case(
-                branch_index=inst_index[cur_task_name],
+                branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
                 branch_fns=task_fns
             )
             # loss 本来就是一个数
