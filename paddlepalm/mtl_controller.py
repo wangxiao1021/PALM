@@ -380,9 +380,17 @@ class Controller(object):
 
         # 这里就没必要了吧 ？
         # merge reader input attrs from backbone and task_instances
-        joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr, task_attrs) # merge input 已经改过
+        joint_input_names = []
+        joint_shape_and_dtypes = []
+        name_to_position = []
+        for i in range(num_instances):
+            joint_input_names.append([])
+            joint_shape_and_dtypes.append([])
+            name_to_position.append([])
+            joint_input_names[i], joint_shape_and_dtypes[i], name_to_position[i] = merge_input_attrs(train_backbone.inputs_attr, task_attrs[i]) # merge input 已经改过
         # joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr)
         # pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
+        
         pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, pred_task_attrs, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
        
         # shapes: [task_id, shapes_of_backbone, shapes_of_inst1, ..., shapes_of_instN]
@@ -394,40 +402,45 @@ class Controller(object):
             print('joint input shape and dtypes:')
             print(joint_shape_and_dtypes)
 
-        # load data
-        for inst in instances:
-            print(inst.name+": preparing data...", end='')
-            inst.reader['train'].load_data()
-            print('ok!')
-
+        # load data ??
+    
         # merge dataset iterators and create net input vars
         iterators = []
         prefixes = []
 
+        # 这些不要————————————————————————————
         for inst in instances:
-            iterators.append(inst.reader['train'].iterator())
-            prefixes.append(inst.name)
+            # iterators.append(inst.reader['train'].iterator())
+            # ===>  instances[i].reader['train'].iterator()
+            # prefixes.append(inst.name)
             mrs.append(inst.mix_ratio)
+        #————————————————————————————————————
 
         weights = [mr / float(sum(mrs)) for mr in mrs]
         task_ids = range(num_instances)
     
         # 那输入输出怎么处理呢
         # joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
-        joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
+        # joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
    
         # mergeinputs的时候冲突的解决  ==>  前缀  之后用的时候按前缀取
 
-        input_attrs = [[i, j, k] for i, (j,k) in zip(joint_input_names, joint_shape_and_dtypes)]
+        input_attrs = []
+        net_inputs = []
+        for p in range(num_instances):
+            input_attrs.append([[i, j, k] for i, (j,k) in zip(joint_input_names[p], joint_shape_and_dtypes[p])])
+            net_inputs.append(create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3))
         pred_input_attrs = [[i, j, k] for i, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
         # ==== for all task
-        net_inputs = create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3)
+        
   
         # build backbone and task layers
         train_prog = fluid.default_main_program()
         train_init_prog = fluid.default_startup_program()
-        bb_output_vars = train_backbone.build(net_inputs, scope_name='__paddlepalm_')
-        assert sorted(bb_output_vars.keys()) == sorted(train_backbone.outputs_attr.keys())
+        bb_output_vars = []
+        for i in range(num_instances):
+            bb_output_vars.append(train_backbone.build(net_inputs[i], scope_name='__paddlepalm_'))
+            assert sorted(bb_output_vars[i].keys()) == sorted(train_backbone.outputs_attr.keys())
 
         pred_prog = fluid.Program()
         pred_init_prog = fluid.Program()
@@ -440,228 +453,143 @@ class Controller(object):
         fluid.framework.switch_startup_program(train_init_prog)
 
         task_output_vars = {}
-        for inst in instances:
-            task_inputs = {'backbone': bb_output_vars}
-            task_inputs_from_reader = _decode_inputs(net_inputs, inst.name)
-            task_inputs['reader'] = task_inputs_from_reader
+        task_inputs = []
+        for i in range(num_instances):
+            task_inputs.append( {'backbone': bb_output_vars{[i]})
+            task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
+            task_inputs[i]['reader'] = task_inputs_from_reader
        
-            scope = inst.task_reuse_scope + '/'
+            scope = instances[i].task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
                
-                output_vars = inst.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
-                output_vars = {inst.name+'/'+key: val for key, val in output_vars.items()}
-                old = len(task_output_vars) # for debug
-                task_output_vars.update(output_vars)
-                assert len(task_output_vars) - old == len(output_vars) # for debug
+                output_vars = instances[i].build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
+                output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
+                # old = len(task_output_vars) # for debug
+                # task_output_vars[i].update(output_vars)
+                # assert len(task_output_vars) - old == len(output_vars) # for debug
             # prepare predict vars for saving inference model
-            if inst.is_target:
+            if instances[i].is_target:
                 with fluid.program_guard(pred_prog, pred_init_prog):
-                    cur_inputs = _decode_inputs(pred_net_inputs, inst.name)
-                    inst.pred_input = cur_inputs
+                    cur_inputs = _decode_inputs(pred_net_inputs, instances[i].name)
+                    instances[i].pred_input = cur_inputs
                     pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
-                    scope = inst.task_reuse_scope + '/'
+                    scope = instances[i].task_reuse_scope + '/'
                     with fluid.unique_name.guard(scope):
-                        inst.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+                        instances[i].build_task_layer(pred_task_inputs, phase='pred', scope=scope)
 
 #adddddddd
-        task_inputs = {'backbone': bb_output_vars}
+        for i in range(num_instances):
+            task_inputs[i] = {'backbone': bb_output_vars[i]}
         
 
-        cls_index = layers.fill_constant(shape=[1], dtype='int32', value=1)
-        match_index = layers.fill_constant(shape=[1], dtype='int32', value=2)
-        mlm_index = layers.fill_constant(shape=[1], dtype='int32', value=3)
-        mrc_index = layers.fill_constant(shape=[1], dtype='int32', value=4)
-        ner_index = layers.fill_constant(shape=[1], dtype='int32', value=5)
+        # cls_index = layers.fill_constant(shape=[1], dtype='int32', value=1)
+        # match_index = layers.fill_constant(shape=[1], dtype='int32', value=2)
+        # mlm_index = layers.fill_constant(shape=[1], dtype='int32', value=3)
+        # mrc_index = layers.fill_constant(shape=[1], dtype='int32', value=4)
+        # ner_index = layers.fill_constant(shape=[1], dtype='int32', value=5)
    
-        inst_index = {}
-        task_index = {}
-        cls_task = []
-        match_task = []
-        mlm_task = []
-        mrc_task = []
-        ner_task = []
-        for inst in instances:
-            if inst.reader_name == 'cls':
-                inst_index[inst.name]=cls_index
-                cls_task.append(inst.name)
-            elif inst.reader_name == 'match':
-                inst_index[inst.name]=match_index
-                match_task.append(inst.name)
-            elif inst.reader_name == 'mlm':
-                inst_index[inst.name]=mlm_index
-                mlm_task.append(inst.name)
-            elif inst.reader_name == 'mrc':
-                inst_index[inst.name]=mrc_index
-                mrc_task.append(inst.name)
-            elif inst.reader_name == 'ner':
-                inst_index[inst.name]=ner_index
-                ner_task.append(inst.name)
+        # inst_index = {}
+        # task_index = {}
+        # cls_task = []
+        # match_task = []
+        # mlm_task = []
+        # mrc_task = []
+        # ner_task = []
+        # for i in range(num_instances):
+        #     if instances[i].reader_name == 'cls':
+        #         inst_index[i]=cls_index
+        #         # cls_task.append(i)
+        #     elif instances[i].reader_name == 'match':
+        #         inst_index[i]=match_index
+        #         # match_task.append(i)
+        #     elif instances[i].reader_name == 'mlm':
+        #         inst_index[i]=mlm_index
+        #         # mlm_task.append(i)
+        #     elif instances[i].reader_name == 'mrc':
+        #         inst_index[i]=mrc_index
+        #         # mrc_task.append(i)
+        #     elif instances[i].reader_name == 'ner':
+        #         inst_index[i]=ner_index
+        #         # ner_task.append(i)
 
-        task_index['cls'] = cls_task
-        task_index['match'] = match_task
-        task_index['mlm'] = mlm_task
-        task_index['mrc'] = mrc_task
-        task_index['ner'] = ner_task
-        cur_task_name = 'mrqa'
-        cur_task = TaskInstance(cur_task_name, self.instname_to_id[cur_task_name], self.instname_to_conf[cur_task_name])
+        # task_index['cls'] = cls_task
+        # task_index['match'] = match_task
+        # task_index['mlm'] = mlm_task
+        # task_index['mrc'] = mrc_task
+        # task_index['ner'] = ner_task
+        # cur_task_name = 'mrqa'
+        # cur_task = TaskInstance(cur_task_name, self.instname_to_id[cur_task_name], self.instname_to_conf[cur_task_name])
 
-        def cls_1():
+        def cls_loss(i):
+            print(instances[i].name+": preparing data...", end='')
+            instances[i].reader['train'].load_data()
+            print('ok!')
 
-            task_output_vars = {}
-            task_inputs = {'backbone': bb_output_vars}
-            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
-            task_inputs['reader'] = task_inputs_from_reader
-       
-            scope = cur_task.task_reuse_scope + '/'
-            with fluid.unique_name.guard(scope):
-               
-                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
-                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
-                # old = len(task_output_vars) # for debug
-                # task_output_vars.update(output_vars)
-                # assert len(task_output_vars) - old == len(output_vars) # for debug
-            # prepare predict vars for saving inference model
-            if cur_task.is_target:
-                with fluid.program_guard(pred_prog, pred_init_prog):
-                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
-                    cur_task.pred_input = cur_inputs
-                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
-                    scope = cur_task.task_reuse_scope + '/'
-                    with fluid.unique_name.guard(scope):
-                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
-
-            return [task_output_vars[cur_task_name+'/loss']]
+            return [task_output_vars[instances[i].name+'/loss']]
             # return cls_loss
 
-        def match_2():
-            task_output_vars = {}
-            task_inputs = {'backbone': bb_output_vars}
-            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
-            task_inputs['reader'] = task_inputs_from_reader
-       
-            scope = cur_task.task_reuse_scope + '/'
-            with fluid.unique_name.guard(scope):
-               
-                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
-                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
-                # old = len(task_output_vars) # for debug
-                # task_output_vars.update(output_vars)
-                # assert len(task_output_vars) - old == len(output_vars) # for debug
-            # prepare predict vars for saving inference model
-            if cur_task.is_target:
-                with fluid.program_guard(pred_prog, pred_init_prog):
-                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
-                    cur_task.pred_input = cur_inputs
-                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
-                    scope = cur_task.task_reuse_scope + '/'
-                    with fluid.unique_name.guard(scope):
-                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+        def match_loss():
+            print(instances[i].name+": preparing data...", end='')
+            instances[i].reader['train'].load_data()
+            print('ok!')
 
-            return [task_output_vars[cur_task_name+'/loss']]
-            # return match_loss
+            return [task_output_vars[instances[i].name+'/loss']]
+        def mlm_loss():
+            print(instances[i].name+": preparing data...", end='')
+            instances[i].reader['train'].load_data()
+            print('ok!')
 
-        def mlm_3():
-            task_output_vars = {}
-            task_inputs = {'backbone': bb_output_vars}
-            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
-            task_inputs['reader'] = task_inputs_from_reader
-       
-            scope = cur_task.task_reuse_scope + '/'
-            with fluid.unique_name.guard(scope):
-               
-                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
-                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
-                # old = len(task_output_vars) # for debug
-                # task_output_vars.update(output_vars)
-                # assert len(task_output_vars) - old == len(output_vars) # for debug
-            # prepare predict vars for saving inference model
-            if cur_task.is_target:
-                with fluid.program_guard(pred_prog, pred_init_prog):
-                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
-                    cur_task.pred_input = cur_inputs
-                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
-                    scope = cur_task.task_reuse_scope + '/'
-                    with fluid.unique_name.guard(scope):
-                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
-
-            return [task_output_vars[cur_task_name+'/loss']]
-            # return mlm_loss
+            return [task_output_vars[instances[i].name+'/loss']]
         
-        def mrc_4():
-            task_output_vars = {}
-            task_inputs = {'backbone': bb_output_vars}
-            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
-            task_inputs['reader'] = task_inputs_from_reader
-       
-            scope = cur_task.task_reuse_scope + '/'
-            with fluid.unique_name.guard(scope):
-               
-                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
-                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
-                # old = len(task_output_vars) # for debug
-                # task_output_vars.update(output_vars)
-                # assert len(task_output_vars) - old == len(output_vars) # for debug
-            # prepare predict vars for saving inference model
-            if cur_task.is_target:
-                with fluid.program_guard(pred_prog, pred_init_prog):
-                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
-                    cur_task.pred_input = cur_inputs
-                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
-                    scope = cur_task.task_reuse_scope + '/'
-                    with fluid.unique_name.guard(scope):
-                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+        def mrc_loss():
+            print(instances[i].name+": preparing data...", end='')
+            instances[i].reader['train'].load_data()
+            print('ok!')
 
-            return [task_output_vars[cur_task_name+'/loss']]
+            return [task_output_vars[instances[i].name+'/loss']]
             # return mrc_loss
         
-        def ner_5():
-            task_output_vars = {}
-            task_inputs = {'backbone': bb_output_vars}
-            task_inputs_from_reader = _decode_inputs(net_inputs, cur_task_name)
-            task_inputs['reader'] = task_inputs_from_reader
-       
-            scope = cur_task.task_reuse_scope + '/'
-            with fluid.unique_name.guard(scope):
-               
-                output_vars = cur_task.build_task_layer(task_inputs, phase='train', scope=scope)   # 分开
-                task_output_vars = {cur_task_name+'/'+key: val for key, val in output_vars.items()}
-                # old = len(task_output_vars) # for debug
-                # task_output_vars.update(output_vars)
-                # assert len(task_output_vars) - old == len(output_vars) # for debug
-            # prepare predict vars for saving inference model
-            if cur_task.is_target:
-                with fluid.program_guard(pred_prog, pred_init_prog):
-                    cur_inputs = _decode_inputs(pred_net_inputs, cur_task_name)
-                    cur_task.pred_input = cur_inputs
-                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
-                    scope = cur_task.task_reuse_scope + '/'
-                    with fluid.unique_name.guard(scope):
-                        cur_task.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+        def ner_loss():
+            print(instances[i].name+": preparing data...", end='')
+            instances[i].reader['train'].load_data()
+            print('ok!')
 
-            return [task_output_vars[cur_task_name+'/loss']]
-            # return ner_loss
+            return [task_output_vars[instances[i].name+'/loss']]
+
+        task_fns = {}
+        for i in range(num_instances):
+            if instances[i].reader_name == 'cls':
+                task_fns[i] = cls_loss(instances[i])
+            elif instances[i].reader_name == 'match':
+                task_fns[i] = match_loss(instances[i])
+            elif instances[i].reader_name == 'mlm':
+                task_fns[i] = mlm_loss(instances[i])
+            elif instances[i].reader_name == 'mrc':
+                task_fns[i] = mrc_loss(instances[i])
+            elif instances[i].reader_name == 'ner':
+                task_fns[i]=ner_loss(instances[i])
 
 
-        
-        task_fns = {1: cls_1, 2: match_2, 3: mlm_3, 4: mrc_4, 5: ner_5}
-
-#????
-        for inst in instances:
-            task_loss[inst.name] = layers.switch_case(
-                branch_index=inst_index[inst.name],
+        task_loss = []
+        bb_fetches = []
+        task_fetches = []
+        fetches = []
+        for i in range(num_instances):
+            task_loss[i] = layers.switch_case(
+                branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
                 branch_fns=task_fns
             )
 
-        bb_fetches = {k: v.name for k,v in bb_output_vars.items()}
-        #  task fetches 分开
-        task_fetches = {k: v.name for k,v in task_output_vars.items()}
-        fetches = task_fetches
-        fetches['__task_id'] = net_inputs['__task_id'].name
+            bb_fetches.append({k: v.name for k,v in bb_output_vars.items()})
+            #  task fetches 分开
+            task_fetches[i].append({k: v.name for k,v in task_output_vars.items()})
+            fetches.append(task_fetches)
+            fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
 
         # compute loss
         # task_id_var = net_inputs['__task_id']
-        net_task_id = np.squeeze(net_outputs['__task_id']).tolist()
-        net_task_id = net_task_id[0] if isinstance(net_task_id, list) else net_task_id #这个是一个数字
+        net_task_id[i] = np.squeeze(net_outputs['__task_id']).tolist()
+        net_task_id[i] = net_task_id[0] if isinstance(net_task_id, list) else net_task_id #这个是一个数字
         cur_task = instances[net_task_id] # 一个任务实例， 可以取cur_task_name计算loss
         cur_task_name = cur_task.name
         #add
