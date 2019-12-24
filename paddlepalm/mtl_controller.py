@@ -584,9 +584,9 @@ class Controller(object):
             #     branch_fns=task_fns
             # )
 
-            bb_fetches.update({k: v.name for k,v in bb_output_vars[i].items()})
+            bb_fetches.append({k: v.name for k,v in bb_output_vars[i].items()})
             #  task fetches 分开
-            task_fetches.update({k: v.name for k,v in output_vars[i].items()})
+            task_fetches.append({k: v.name for k,v in output_vars[i].items()})
             fetches.append(task_fetches[i])
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
             task_loss[i] = layers.switch_case(
