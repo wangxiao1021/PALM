@@ -442,6 +442,9 @@ class Controller(object):
         task_output_vars = {}
         bb_fetches = {}
         fetches = {}
+        task_id_var = {}
+        task_loss = {}
+        loss = fluid.layers.data(name='loss', shape=[1], dtype='float32')
         for i in range(num_instances):
             task_inputs[i] = {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
@@ -470,11 +473,11 @@ class Controller(object):
             fetches[i] = task_fetches[i]
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
 
-        # compute loss
-        task_id_var = net_inputs['__task_id']
-        task_id_vec = fluid.one_hot(task_id_var, num_instances)
-        losses = fluid.layers.concat([task_output_vars[inst.name+'/loss'] for inst in instances], axis=0)
-        loss = layers.reduce_sum(task_id_vec * losses)
+            # compute loss
+            task_id_var[i] = net_inputs[i]['__task_id']
+            task_loss[i] = task_output_vars[i][instances[i].name+'/loss']
+            losses = fluid.layers.concat([task_loss[i], loss], axis=0)
+            loss = layers.reduce_sum(losses)
 
         main_reader = main_inst.reader['train']
 
