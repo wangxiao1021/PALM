@@ -592,6 +592,7 @@ class Controller(object):
             print('--------*******--------')
             print(i)
             print('---------')
+            print(task_fns)
             task_loss[i] = layers.switch_case(
                 branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
                 branch_fns=task_fns
