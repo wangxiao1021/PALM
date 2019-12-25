@@ -35,6 +35,9 @@ from paddlepalm.utils.reader_helper import create_net_inputs, create_iterator_fn
 from paddlepalm.default_settings import *
 from task_instance import TaskInstance, check_instances
 
+import Queue
+from threading import Thread
+
 DEBUG=False
 VERBOSE=0
 
@@ -117,7 +120,6 @@ def _check_io(in_attr, out_attr, strict=False, in_name="left", out_name="right")
                 logging.warning('{}: shape or dtype not consistent!\n{}:\n{}\n{}:\n{}'.format(name, in_name, attr, out_name, out_attr[name]))
 
 
-# 调用时只merge config.yaml和当前任务的config   conf1 优先级高，是特定任务的conf
 def _merge_conf(conf1, conf2, conf1_first=True, strict=False):
     assert isinstance(conf1, dict), "{} is not a dict.".format(conf1)
     assert isinstance(conf2, dict), "{} is not a dict.".format(conf2)
@@ -136,7 +138,7 @@ def _merge_conf(conf1, conf2, conf1_first=True, strict=False):
         base_conf[k] = v
     return base_conf
 
-# 给所有inputs加上一个scope name
+
 def _encode_inputs(inputs, scope_name, sep='/', cand_set=None):
     outputs = {}
     for k, v in inputs.items():
@@ -149,7 +151,7 @@ def _encode_inputs(inputs, scope_name, sep='/', cand_set=None):
             outputs[scope_name+sep+k] = v
     return outputs
 
-# ??
+
 def _decode_inputs(inputs, scope_name, sep='/', keep_unk_keys=True):
     outputs = {}
     for name, value in inputs.items():
@@ -218,7 +220,7 @@ class Controller(object):
         self.instname_to_conf = {}
         self.instname_to_id = {}
         self.fetches = {}
-        # 这里要分开 
+
         for id, instname in enumerate(instnames):
             instpath = os.path.join(task_dir, instname+'.yaml')
             conf = _parse_yaml(instpath, support_cmd_line=False)
@@ -230,6 +232,11 @@ class Controller(object):
             
             self.instname_to_conf[instname] = conf
             self.instname_to_id[instname] = id
+
+        print('---tag----self.instaname_to_conf')
+        print(self.instname_to_conf)
+        print('---tag----self.instname_to_id')
+        print(self.instname_to_id)
 
         # prepare backbone
         if 'backbone_config_path' in mtl_conf:
@@ -247,7 +254,8 @@ class Controller(object):
         instances = []
         for name in instnames:
             instances.append(TaskInstance(name, self.instname_to_id[name], self.instname_to_conf[name]))
-
+        print('---tag----instances')
+        print(instances)
         check_instances(instances)
 
         # parse target_tag
@@ -341,6 +349,7 @@ class Controller(object):
         main_conf = main_inst.config
         if not os.path.exists(main_conf['save_path']):
             os.makedirs(main_conf['save_path'])
+            os.makedirs(os.path.join(main_conf['save_path'], 'ckpt'))
         
         # prepare backbone
         train_backbone = Backbone(bb_conf, phase='train')
@@ -348,19 +357,16 @@ class Controller(object):
 
         # create reader, task
         # then check i/o across reader, backbone and task_layer
-        task_attrs = []
-        for i in range(num_instances):
-            task_attrs.append([])
-        # 改成当前任务的
-        pred_task_attrs = []   # 这个就一个，不用像上面那样了吧
-        # for inst in instances:   这边只是check吗
+        task_attrs = {}
+        pred_task_attrs = []   
+
         for i in range(num_instances):
             train_reader = instances[i].Reader(instances[i].config, phase='train')
             instances[i].reader['train'] = train_reader
             train_parad = instances[i].Paradigm(instances[i].config, phase='train', backbone_config=bb_conf)
             instances[i].task_layer['train'] = train_parad
             task_attr_from_reader = _encode_inputs(train_parad.inputs_attrs['reader'], instances[i].name)
-            task_attrs[i].append(task_attr_from_reader)
+            task_attrs[i] = task_attr_from_reader
 
             _check_io(train_backbone.inputs_attr, train_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.train')
             _check_io(train_parad.inputs_attrs['reader'], train_reader.outputs_attr, in_name='task_paradigm.train.reader', out_name='reader.train')
@@ -377,22 +383,15 @@ class Controller(object):
                 _check_io(pred_backbone.inputs_attr, pred_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.pred')
                 _check_io(pred_parad.inputs_attrs['reader'], pred_reader.outputs_attr, in_name='task_paradigm.pred.reader', out_name='reader.pred')
                 _check_io(pred_parad.inputs_attrs['backbone'], pred_backbone.outputs_attr, in_name='task_paradigm.pred.backbone', out_name=bb_name+'_backbone')
-        
-
-        # 这里就没必要了吧 ？
+ 
         # merge reader input attrs from backbone and task_instances
-        joint_input_names = []
-        joint_shape_and_dtypes = []
-        name_to_position = []
+        joint_input_names = {}
+        joint_shape_and_dtypes = {}
+        name_to_position = {}
         for i in range(num_instances):
-            joint_input_names.append([])
-            joint_shape_and_dtypes.append([])
-            name_to_position.append([])
             joint_input_names[i], joint_shape_and_dtypes[i], name_to_position[i] = merge_input_attrs(train_backbone.inputs_attr, task_attrs[i]) # merge input 已经改过
-        # joint_input_names, joint_shape_and_dtypes, name_to_position = merge_input_attrs(train_backbone.inputs_attr)
-        # pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
-        
-        pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, pred_task_attrs, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
+
+        pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, pred_task_attrs, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
        
         # shapes: [task_id, shapes_of_backbone, shapes_of_inst1, ..., shapes_of_instN]
 
@@ -403,44 +402,24 @@ class Controller(object):
             print('joint input shape and dtypes:')
             print(joint_shape_and_dtypes)
 
-        # load data ??
-    
-        # merge dataset iterators and create net input vars
-        iterators = []
-        prefixes = []
-
-        # 这些不要————————————————————————————
-        for inst in instances:
-            # iterators.append(inst.reader['train'].iterator())
-            # ===>  instances[i].reader['train'].iterator()
-            # prefixes.append(inst.name)
-            mrs.append(inst.mix_ratio)
-        #————————————————————————————————————
-
-        weights = [mr / float(sum(mrs)) for mr in mrs]
-        task_ids = range(num_instances)
-    
-        # 那输入输出怎么处理呢
-        # joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
-        # joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE)
-   
-        # mergeinputs的时候冲突的解决  ==>  前缀  之后用的时候按前缀取
-
-        input_attrs = []
-        net_inputs = []
+        input_attrs = {}
+        net_inputs = {}
         for p in range(num_instances):
-            input_attrs.append([[i, j, k] for i, (j,k) in zip(joint_input_names[p], joint_shape_and_dtypes[p])])
-            net_inputs.append(create_net_inputs(input_attrs[p], async=True, iterator_fn=instances[p].reader['train'].iterator(), dev_count=dev_count, n_prefetch=3))
+            input_attrs[p] = [[i, j, k] for i, (j,k) in zip(joint_input_names[p], joint_shape_and_dtypes[p])]
+            net_inputs[p] = create_net_inputs(input_attrs[p], async=False)
+            # net_inputs[p] = create_net_inputs(input_attrs[p], async=True, iterator_fn=instances[p].reader['train'].iterator(), dev_count=dev_count, n_prefetch=3)
         pred_input_attrs = [[i, j, k] for i, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
-        # ==== for all task
+        self._net_inputs = net_inputs
         
   
         # build backbone and task layers
         train_prog = fluid.default_main_program()
         train_init_prog = fluid.default_startup_program()
-        bb_output_vars = []
+        bb_output_vars = {}
         for i in range(num_instances):
-            bb_output_vars.append(train_backbone.build(net_inputs[i], scope_name='__paddlepalm_'))
+            # print('xixixi-----------')
+
+            bb_output_vars[i]=train_backbone.build(net_inputs[i], scope_name='__paddlepalm_')
             assert sorted(bb_output_vars[i].keys()) == sorted(train_backbone.outputs_attr.keys())
 
         pred_prog = fluid.Program()
@@ -454,21 +433,22 @@ class Controller(object):
         fluid.framework.switch_startup_program(train_init_prog)
 
         task_output_vars = {}
-        task_inputs = []
-        output_vars = []
+        task_inputs = {}
+        self.output_vars = {}
         for i in range(num_instances):
-            task_inputs.append( {'backbone': bb_output_vars[i]})
+            task_inputs[i] =  {'backbone': bb_output_vars[i]})
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
             task_inputs[i]['reader'] = task_inputs_from_reader
        
             scope = instances[i].task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
                
-                output_vars.append(instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope))   # 分开
-                output_vars[i] = {key: val for key, val in output_vars[i].items()}
+                self.output_vars[i] = instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope)   # 分开
+                self.output_vars[i] = {key: val for key, val in self.output_vars[i].items()}
+                # output_vars = {inst.name+'/'+key: val for key, val in output_vars.items()}
                 # old = len(task_output_vars) # for debug
-                # task_output_vars[i].update(output_vars)
-                # assert len(task_output_vars) - old == len(output_vars) # for debug
+                # task_output_vars[i].update(self.output_vars)
+                # assert len(task_output_vars) - old == len(self.output_vars) # for debug
             # prepare predict vars for saving inference model
             if instances[i].is_target:
                 with fluid.program_guard(pred_prog, pred_init_prog):
@@ -479,142 +459,107 @@ class Controller(object):
                     with fluid.unique_name.guard(scope):
                         instances[i].build_task_layer(pred_task_inputs, phase='pred', scope=scope)
 
-#adddddddd
-        for i in range(num_instances):
-            task_inputs[i] = {'backbone': bb_output_vars[i]}
-        
 
-        task_loss= {}
+        self.task_loss= {}
         def cls_loss(i):
-            self.fetches = task_fetches[i]
-            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
+            self.fetches[i] = self.task_fetches[i]
+             
             print('---cls---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
-            task_loss['cls'] = output_vars[i]['loss']
-            # return output_vars[i]['loss']
+            self.task_loss['cls'] = self.output_vars[i]['loss']
+            # return self.output_vars[i]['loss']
             # return cls_loss
 
         def match_loss(i):
-            self.fetches = task_fetches[i]
-            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
+            self.fetches[i] = self.task_fetches[i]
+             
             print('---match---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
-            task_loss['match'] = output_vars[i]['loss']
-            # return output_vars[i]['loss']
+            self.task_loss['match'] = self.output_vars[i]['loss']
+            # return self.output_vars[i]['loss']
 
         def mlm_loss(i):
-            self.fetches = task_fetches[i]
-            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
+            self.fetches[i] = self.task_fetches[i]
+             
             print('---mlm---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
-            task_loss['mlm'] = output_vars[i]['loss']
-            # return output_vars[i]['loss']
+            self.task_loss['mlm'] = self.output_vars[i]['loss']
+            # return self.output_vars[i]['loss']
         
         def mrc_loss(i):
-            self.fetches = task_fetches[i]
-            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
+            self.fetches[i] = self.task_fetches[i]
+             
             print('---mrc---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
-            task_loss['mrc'] = output_vars[i]['loss']
-            # return output_vars[i]['loss']
+            self.task_loss['mrc'] = self.output_vars[i]['loss']
+            # return self.output_vars[i]['loss']
             # return mrc_loss
         
         def ner_loss(i):
-            self.fetches = task_fetches[i]
-            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
+            self.fetches[i] = self.task_fetches[i]
+            #  
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            # return output_vars[i]['loss']
+            # return self.output_vars[i]['loss']
 
-        task_fns = {}
+        self.task_fns = {}
         for i in range(num_instances):
             if instances[i].reader_name == 'cls':
-                task_fns[i] = lambda: cls_loss(i)
+                self.task_fns[i] = lambda: cls_loss(i)
             elif instances[i].reader_name == 'match':
-                task_fns[i] = lambda: match_loss(i)
+                self.task_fns[i] = lambda: match_loss(i)
             elif instances[i].reader_name == 'mlm':
-                task_fns[i] = lambda: mlm_loss(i)
+                self.task_fns[i] = lambda: mlm_loss(i)
             elif instances[i].reader_name == 'mrc':
-                task_fns[i] = lambda: mrc_loss(i)
+                self.task_fns[i] = lambda: mrc_loss(i)
             elif instances[i].reader_name == 'ner':
-                task_fns[i] = lambda: ner_loss(i)
+                self.task_fns[i] = lambda: ner_loss(i)
 
 
         
         bb_fetches = {}
-        task_fetches = {}
+        self.task_fetches = {}
         # fetches = {}
         loss = fluid.layers.data(name='loss', shape=[1], dtype='float32')
         # loss = 
         # print("**********")
-        # print(task_fns)
+        # print(self.task_fns)
         for i in range(num_instances):
-            # task_loss[i] = layers.switch_case(
-            #     branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
-            #     branch_fns=task_fns
-            # )
-
+          
             bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
             #  task fetches 分开
-            task_fetches[i] = {k: v.name for k,v in output_vars[i].items()}
-            # fetches[i] = task_fetches[i]
-            # fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
-            # print('--------*******--------')
-            # print(i)
-            # print('---------')
-            # print(task_fns)
-            layers.switch_case(
-                branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
-                branch_fns=task_fns
-            )
-            print('new loss')
-            # print(task_loss)
+            self.task_fetches[i] = {k: v.name for k,v in self.output_vars[i].items()}
+            # layers.switch_case(
+            #     branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
+            #     branch_fns=self.task_fns
+            # )
+            self.fetches[i] = self.task_fetches[i]
+             
+            # print('---mrc---')
+            print(instances[i].name+": preparing data...", end='')
+            instances[i].reader['train'].load_data()
+            print('ok!')
+            self.task_loss[i] = self.output_vars[i]['loss']
+            # print('new loss')
+            # print(self.task_loss)
             
-            # loss = fluid.layers.elementwise_add(loss, task_loss[0])
-            # 这里task_loss是一个list，组网的时候全都有
-        for k,v in task_loss.items():
-            loss = fluid.layers.concat(v, loss)
-            print(v)
+            # loss = fluid.layers.elementwise_add(loss, self.task_loss[0])
+            # 这里self.task_loss是一个list，组网的时候全都有
+        for k,v in self.task_loss.items():
+            loss = fluid.layers.concat([v,loss])
+            # print(v)
             
         loss = fluid.layers.reduce_sum(loss)
-        # fluid.layers.Print(loss, message='loss')
-        print(loss)
-        # loss = layers.fill_constant(shape=[1], dtype='int32', value=loss[0])
-        # print(loss)
-
-            
-
-            # compute loss
-            # task_id_var = net_inputs['__task_id']
-
-
-            # 看一下net_outputs 在哪里定义的？？？？
-
-            # net_task_id[i] = np.squeeze(net_outputs[i]['__task_id']).tolist()
-            # net_task_id[i] = net_task_id[i][0] if isinstance(net_task_id[i], list) else net_task_id[i] #这个是一个数字
-            # cur_task = instances[net_task_id[i]] # 一个任务实例， 可以取cur_task_name计算loss
-            # cur_task_name = cur_task.name
-        #add
-
-        # task_id_vec = fluid.one_hot(task_id_var, num_instances) #no
-        # 这里的loss哪来的
-        # 算单任务的loss 这里应该没问题
-        
-        # losses = layers.reduce_sum([task_output_vars[inst.name+'/loss'] for inst in instances])
-        # loss = fluid.data(name='x', shape=[1], dtype='float32')
-        # losses = fluid.layers.concat([task_output_vars[inst.name+'/loss'] for inst in instances], axis=0)
-        # loss = layers.reduce_sum(task_id_vec * losses)
-
         main_reader = main_inst.reader['train']
 
         num_examples = main_reader.num_examples
@@ -639,8 +584,8 @@ class Controller(object):
             optim_mod = importlib.import_module(OPTIMIZER_DIR + '.' + main_conf['optimizer'])
             optimize = getattr(optim_mod, OPTIMIZE_METHOD)
             
-            print('\n\n\n\n\n\n\n !!!!!!')
-            print(loss)
+            # print('\n\n\n\n\n\n\n !!!!!!')
+            # print(loss)
             optimize(loss, main_conf, max_train_steps, warmup_steps, fluid.default_main_program())
 
             loss.persistable = True
@@ -658,6 +603,9 @@ class Controller(object):
         #self.fetches = fetches
         self.has_init_train = True
         self.has_init_pred = True
+
+        self.weights = [mr / float(sum(mrs)) for mr in mrs]
+        self.task_ids = range(num_instances)
 
         self.exe.run(fluid.default_startup_program())
         print("\nRandomly initialize parameters...\n")
@@ -728,20 +676,97 @@ class Controller(object):
                         return False
             return True
 
+        def pack_multicard_feed(iterator, net_inputs, dev_count):
+            ret = []
+            mask = []
+            for i in range(dev_count):
+                temp = {}
+                content, flag = next(iterator)
+                for q, var in net_inputs.items():
+                    temp[var.name] = content[q]
+                ret.append(temp)
+                mask.append(1 if flag else 0)
+            return ret, mask
+
         # do training
-        fetch_names, fetch_list = zip(*fetches.items())
+        fetch_names = {}
+        fetch_list = {}
+        for i in range(num_instances):
+            fetch_names[i], fetch_list[i] = zip(*fetches[i].items())
 
         main_step = 0 # only count for main task
         global_step = 0 # count for all tasks
         epoch = 0
         time_begin = time.time()
         backbone_buffer = []
+        def multi_dev_reader(reader, dev_count):
+            def worker(reader, dev_count, queue):
+                dev_batches = []
+                for index, data in enumerate(reader()):
+                    if len(dev_batches) < dev_count:
+                        dev_batches.append(data)
+                    if len(dev_batches) == dev_count:
+                        queue.put((dev_batches, 0))
+                        dev_batches = []
+                # For the prediction of the remained batches, pad more batches to 
+                # the number of devices and the padded samples would be removed in
+                # prediction outputs. 
+                if len(dev_batches) > 0:
+                    num_pad = dev_count - len(dev_batches)
+                    for i in range(len(dev_batches), dev_count):
+                        dev_batches.append(dev_batches[-1])
+                    queue.put((dev_batches, num_pad))
+                queue.put(None)
+
+            queue = Queue.Queue(dev_count*2)
+            p = Thread(
+                target=worker, args=(reader, dev_count, queue))
+            p.daemon = True
+            p.start()
+            while True:
+                ret = queue.get()
+                if ret is not None:
+                    batches, num_pad = ret
+                    queue.task_done()
+                    for batch in batches:
+                        flag = num_pad == 0
+                        if num_pad > 0:
+                            num_pad -= 1
+                        yield batch, flag
+                else:
+                    break
+            queue.join()
+
+        # joint_iterator = multi_dev_reader(self._joint_iterator_fn, self.dev_count)
         while not train_finish():
-            rt_outputs = self.exe.run(train_program, fetch_list=fetch_list)
-            rt_outputs = {k:v for k,v in zip(fetch_names, rt_outputs)}
-            rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
-            rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id #这个是一个数字
+            # feed, mask = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
+            # print(self.task_ids)
+            # print(self.weights)
+            # id = np.random.choice(self.task_ids, p=self.weights)
+            id = 0
+            rt_task_id = id
+            # layers.switch_case(
+            #     branch_index=layers.fill_constant(shape=[1], dtype='int32', value=id),
+            #     branch_fns=self.task_fns
+            # )
+            self.fetches[id] = self.task_fetches[id]
+             
+            print('---mrc---')
+            print(instances[id].name+": preparing data...", end='')
+            instances[id].reader['train'].load_data()
+            print('ok!')
+            self.task_loss[id] = self.output_vars[id]['loss']
+            #np.array([[id]]).astype("int64")
+            print("hhhhh------hhhhhh------hhhhh")
+            print(fetch_list[id])
+            rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list[id])
+            rt_outputs = {k:v for k,v in zip(fetch_names[id], rt_outputs)}
+            
+            # rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
+            # rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id #这个是一个数字
+            
             cur_task = instances[rt_task_id] # 一个任务实例， 可以取cur_task.name计算loss
+            # outputs = next(cur_task.reader['train'].iterator())
             
             #涉及到backbone的不用管
             backbone_rt_outputs = {k:v for k,v in rt_outputs.items() if '/' not in k}
@@ -749,7 +774,7 @@ class Controller(object):
 
 
             # 当前任务的输出            
-            task_rt_outputs = {k[len(cur_task.name+'/'):]: v for k,v in rt_outputs.items() if k.startswith(cur_task.name+'/')}
+            task_rt_outputs = {k: v for k,v in rt_outputs.items()}
             instances[rt_task_id].task_layer['train'].postprocess(task_rt_outputs)
 
             global_step += 1
@@ -759,7 +784,7 @@ class Controller(object):
                 cur_task.save(suffix='.step'+str(cur_task.cur_train_step))
 
             if global_step % main_conf.get('print_every_n_steps', 5) == 0:
-                loss = rt_outputs[cur_task.name+'/loss']
+                loss = rt_outputs['loss']
                 loss = np.mean(np.squeeze(loss)).tolist()
 
                 time_end = time.time()
