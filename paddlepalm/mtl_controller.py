@@ -441,6 +441,7 @@ class Controller(object):
         task_inputs = {}
         task_output_vars = {}
         bb_fetches = {}
+        task_fetches = {}
         fetches = {}
         task_id_var = {}
         task_loss = {}
