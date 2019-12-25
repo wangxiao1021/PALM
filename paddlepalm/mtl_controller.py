@@ -597,7 +597,8 @@ class Controller(object):
                 branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
                 branch_fns=task_fns
             )
-            
+            print('new loss')
+            print(task_loss[i])
             loss = fluid.layers.elementwise_add(loss, task_loss[i])
             
 
