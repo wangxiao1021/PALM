@@ -522,7 +522,7 @@ class Controller(object):
         # cur_task = TaskInstance(cur_task_name, self.instname_to_id[cur_task_name], self.instname_to_conf[cur_task_name])
 
         def cls_loss(i):
-            print(instances[i].name+": cls preparing data...", end='')
+            print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
@@ -530,20 +530,20 @@ class Controller(object):
             # return cls_loss
 
         def match_loss(i):
-            print(instances[i].name+": match preparing data...", end='')
+            print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
             return [output_vars[i]['loss']]
         def mlm_loss(i):
-            print(instances[i].name+": mlm preparing data...", end='')
+            print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
             return [output_vars[i]['loss']]
         
         def mrc_loss(i):
-            print(instances[i].name+": mrc preparing data...", end='')
+            print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
@@ -571,7 +571,7 @@ class Controller(object):
                 task_fns[i] = lambda: ner_loss(i)
 
 
-        task_loss = []
+        task_loss = {}
         bb_fetches = {}
         task_fetches = {}
         fetches = {}
