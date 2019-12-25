@@ -589,7 +589,9 @@ class Controller(object):
             task_fetches[i] = {k: v.name for k,v in output_vars[i].items()}
             fetches[i] = task_fetches[i]
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
-            print(task_fns)
+            print('--------*******--------')
+            print(i)
+            print('---------')
             task_loss[i] = layers.switch_case(
                 branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
                 branch_fns=task_fns
