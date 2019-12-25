@@ -401,6 +401,17 @@ class Controller(object):
             print(joint_input_names)
             print('joint input shape and dtypes:')
             print(joint_shape_and_dtypes)
+        
+        iterators = []
+        prefixes = []
+        mrs = []
+
+        for inst in instances:
+            iterators.append(inst.reader['train'].iterator())
+            prefixes.append(inst.name)
+
+        joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE, return_type='dict')
+        self._joint_iterator_fn = joint_iterator_fn
 
         input_attrs = {}
         net_inputs = {}
@@ -436,7 +447,7 @@ class Controller(object):
         task_inputs = {}
         self.output_vars = {}
         for i in range(num_instances):
-            task_inputs[i] =  {'backbone': bb_output_vars[i]})
+            task_inputs[i] =  {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
             task_inputs[i]['reader'] = task_inputs_from_reader
        
@@ -737,9 +748,10 @@ class Controller(object):
                     break
             queue.join()
 
-        # joint_iterator = multi_dev_reader(self._joint_iterator_fn, self.dev_count)
+        
         while not train_finish():
-            # feed, mask = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
+            joint_iterator = multi_dev_reader(self._joint_iterator_fn, self.dev_count)
+            feed, mask = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
             # print(self.task_ids)
             # print(self.weights)
             # id = np.random.choice(self.task_ids, p=self.weights)
@@ -759,6 +771,7 @@ class Controller(object):
             #np.array([[id]]).astype("int64")
             print("hhhhh------hhhhhh------hhhhh")
             print(fetch_list[id])
+            feed, mask = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
             rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list[id])
             rt_outputs = {k:v for k,v in zip(fetch_names[id], rt_outputs)}
             
