@@ -111,8 +111,6 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
         joint_shape_and_dtypes: 本质上是根据bb和parad的attr设定的，并且由reader中的attr自动填充-1（可变）维度得到，因此通过与iterator的校验可以完成runtime的batch正确性检查
     """
 
-    pos_to_outname = {j:i for i,j in outname_to_pos.items()}
-
     task_ids = range(len(iterators))
     weights = [mr / float(sum(mrs)) for mr in mrs]
     if not keep_one_task:
@@ -120,7 +118,9 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
 
     results = {}
     outbufs = {}
+    pos_to_outname = {}
     for id in task_ids:
+        pos_to_outname[id] = {j:i for i,j in outname_to_pos[id].items()}
         result = _zero_batch(joint_shape_and_dtypes[id])
         outbuf = {}
         outputs = next(iterators[id]) # dict type
@@ -214,7 +214,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                 elif return_type == 'dict':
                     temp = {}
                     for pos, i in enumerate(results):
-                        temp[pos_to_outname[pos]] = i
+                        temp[pos_to_outname[id][pos]] = i
                     yield temp
 
     return iterator
