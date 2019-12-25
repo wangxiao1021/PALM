@@ -598,7 +598,8 @@ class Controller(object):
                 branch_fns=task_fns
             )
             print('new loss')
-            print(task_loss[i])
+            print(task_loss)
+            fluid.layers.Print(task_loss)
             loss = fluid.layers.elementwise_add(loss, task_loss)
             
 
