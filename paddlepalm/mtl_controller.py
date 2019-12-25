@@ -522,6 +522,7 @@ class Controller(object):
         # cur_task = TaskInstance(cur_task_name, self.instname_to_id[cur_task_name], self.instname_to_conf[cur_task_name])
 
         def cls_loss(i):
+            print('---cls---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
@@ -530,12 +531,14 @@ class Controller(object):
             # return cls_loss
 
         def match_loss(i):
+            print('---match---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
             return [output_vars[i]['loss']]
         def mlm_loss(i):
+            print('---mlm---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
@@ -543,6 +546,7 @@ class Controller(object):
             return [output_vars[i]['loss']]
         
         def mrc_loss(i):
+            print('---mrc---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
@@ -575,7 +579,8 @@ class Controller(object):
         bb_fetches = {}
         task_fetches = {}
         fetches = {}
-        loss = layers.fill_constant(shape=[1], dtype='float32', value=0.0)
+        loss = 0
+        # loss = 
         # print("**********")
         # print(task_fns)
         for i in range(num_instances):
@@ -589,18 +594,23 @@ class Controller(object):
             task_fetches[i] = {k: v.name for k,v in output_vars[i].items()}
             fetches[i] = task_fetches[i]
             fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
-            print('--------*******--------')
-            print(i)
-            print('---------')
-            print(task_fns)
+            # print('--------*******--------')
+            # print(i)
+            # print('---------')
+            # print(task_fns)
             task_loss = layers.switch_case(
                 branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
                 branch_fns=task_fns
             )
             print('new loss')
-            print(task_loss)
-            fluid.layers.Print(task_loss)
-            loss = fluid.layers.elementwise_add(loss, task_loss)
+            # print(task_loss)
+            
+            # loss = fluid.layers.elementwise_add(loss, task_loss[0])
+            loss += task_loss[0]
+            print(loss)
+            # loss = layers.fill_constant(shape=[1], dtype='int32', value=loss)
+            # print(loss)
+
             
 
             # compute loss
