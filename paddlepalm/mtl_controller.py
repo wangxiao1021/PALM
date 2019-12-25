@@ -453,7 +453,7 @@ class Controller(object):
             scope = instances[i].task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
                
-                output_vars = instances[i].build_task_layer(task_inputs, phase='train', scope=scope)
+                output_vars = instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope)
                 output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
                 # old = len(task_output_vars) # for debug
                 task_output_vars[i] = output_vars
