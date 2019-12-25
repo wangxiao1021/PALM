@@ -571,7 +571,7 @@ class Controller(object):
                 task_fns[i] = lambda: ner_loss(i)
 
 
-        task_loss = {}
+        
         bb_fetches = {}
         task_fetches = {}
         fetches = {}
@@ -593,13 +593,13 @@ class Controller(object):
             print(i)
             print('---------')
             print(task_fns)
-            task_loss[i] = layers.switch_case(
+            task_loss = layers.switch_case(
                 branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
                 branch_fns=task_fns
             )
             print('new loss')
             print(task_loss[i])
-            loss = fluid.layers.elementwise_add(loss, task_loss[i])
+            loss = fluid.layers.elementwise_add(loss, task_loss)
             
 
             # compute loss
