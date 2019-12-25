@@ -118,9 +118,11 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
     if not keep_one_task:
         dev_count = 1
 
-    results = _zero_batch(joint_shape_and_dtypes)
-    outbuf = {}
+    results = {}
+    outbufs = {}
     for id in task_ids:
+        result = _zero_batch(joint_shape_and_dtypes[id])
+        outbuf = {}
         outputs = next(iterators[id]) # dict type
         outbuf[id] = outputs
         prefix = iterator_prefixes[id]
@@ -130,14 +132,16 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
             if outname in outname_to_pos:
                 idx = outname_to_pos[outname]
                 val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=outname+': ')
-                results[idx] = val
+                result[idx] = val
 
             if task_outname in outname_to_pos:
                 idx = outname_to_pos[task_outname]
                 val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=task_outname+': ')
-                results[idx] = val
+                result[idx] = val
+        results[i] = result
+        outbufs[i] = outbuf
 
-    fake_batch = results
+    all_batch = results
     dev_count_bak = dev_count
 
     def iterator():
@@ -145,7 +149,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
         has_show_warn = False
         while True:
             id = np.random.choice(task_ids, p=weights)
-            results = fake_batch
+            results = all_batch[id]
             if v > 0:
                 print('----- debug joint iterator -----')
                 print('sampled task id: '+str(id))

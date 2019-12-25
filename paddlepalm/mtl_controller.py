@@ -391,11 +391,12 @@ class Controller(object):
             print('joint input shape and dtypes:')
             print(joint_shape_and_dtypes)
 
-        # load data
+        # load data  ---
         for inst in instances:
             print(inst.name+": preparing data...", end='')
             inst.reader['train'].load_data()
             print('ok!')
+        #-----------------------------
 
         # merge dataset iterators and create net input vars
         iterators = []
@@ -407,6 +408,7 @@ class Controller(object):
             prefixes.append(inst.name)
             mrs.append(inst.mix_ratio)
 
+        # ---这里，joint_shape_and_dtypes, name_to_position 都变成了dict
         joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE, return_type='dict')
         self._joint_iterator_fn = joint_iterator_fn
 
