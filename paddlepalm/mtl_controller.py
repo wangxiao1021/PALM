@@ -217,6 +217,7 @@ class Controller(object):
 
         self.instname_to_conf = {}
         self.instname_to_id = {}
+        self.fetches = {}
         # 这里要分开 
         for id, instname in enumerate(instnames):
             instpath = os.path.join(task_dir, instname+'.yaml')
@@ -483,83 +484,57 @@ class Controller(object):
             task_inputs[i] = {'backbone': bb_output_vars[i]}
         
 
-        # cls_index = layers.fill_constant(shape=[1], dtype='int32', value=1)
-        # match_index = layers.fill_constant(shape=[1], dtype='int32', value=2)
-        # mlm_index = layers.fill_constant(shape=[1], dtype='int32', value=3)
-        # mrc_index = layers.fill_constant(shape=[1], dtype='int32', value=4)
-        # ner_index = layers.fill_constant(shape=[1], dtype='int32', value=5)
-   
-        # inst_index = {}
-        # task_index = {}
-        # cls_task = []
-        # match_task = []
-        # mlm_task = []
-        # mrc_task = []
-        # ner_task = []
-        # for i in range(num_instances):
-        #     if instances[i].reader_name == 'cls':
-        #         inst_index[i]=cls_index
-        #         # cls_task.append(i)
-        #     elif instances[i].reader_name == 'match':
-        #         inst_index[i]=match_index
-        #         # match_task.append(i)
-        #     elif instances[i].reader_name == 'mlm':
-        #         inst_index[i]=mlm_index
-        #         # mlm_task.append(i)
-        #     elif instances[i].reader_name == 'mrc':
-        #         inst_index[i]=mrc_index
-        #         # mrc_task.append(i)
-        #     elif instances[i].reader_name == 'ner':
-        #         inst_index[i]=ner_index
-        #         # ner_task.append(i)
-
-        # task_index['cls'] = cls_task
-        # task_index['match'] = match_task
-        # task_index['mlm'] = mlm_task
-        # task_index['mrc'] = mrc_task
-        # task_index['ner'] = ner_task
-        # cur_task_name = 'mrqa'
-        # cur_task = TaskInstance(cur_task_name, self.instname_to_id[cur_task_name], self.instname_to_conf[cur_task_name])
-
+        task_loss= {}
         def cls_loss(i):
+            self.fetches = task_fetches[i]
+            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
             print('---cls---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
-
-            return [output_vars[i]['loss']]
+            task_loss['cls'] = output_vars[i]['loss']
+            # return output_vars[i]['loss']
             # return cls_loss
 
         def match_loss(i):
+            self.fetches = task_fetches[i]
+            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
             print('---match---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
+            task_loss['match'] = output_vars[i]['loss']
+            # return output_vars[i]['loss']
 
-            return [output_vars[i]['loss']]
         def mlm_loss(i):
+            self.fetches = task_fetches[i]
+            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
             print('---mlm---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
-
-            return [output_vars[i]['loss']]
+            task_loss['mlm'] = output_vars[i]['loss']
+            # return output_vars[i]['loss']
         
         def mrc_loss(i):
+            self.fetches = task_fetches[i]
+            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
             print('---mrc---')
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
-
-            return [output_vars[i]['loss']]
+            task_loss['mrc'] = output_vars[i]['loss']
+            # return output_vars[i]['loss']
             # return mrc_loss
         
         def ner_loss(i):
+            self.fetches = task_fetches[i]
+            self.fetches['__task_id'] = net_inputs[i]['__task_id'].name
             print(instances[i].name+": preparing data...", end='')
             instances[i].reader['train'].load_data()
             print('ok!')
 
-            return [output_vars[i]['loss']]
+            # return output_vars[i]['loss']
 
         task_fns = {}
         for i in range(num_instances):
@@ -578,8 +553,8 @@ class Controller(object):
         
         bb_fetches = {}
         task_fetches = {}
-        fetches = {}
-        loss = 0
+        # fetches = {}
+        loss = fluid.layers.data(name='loss', shape=[1], dtype='float32')
         # loss = 
         # print("**********")
         # print(task_fns)
@@ -592,13 +567,13 @@ class Controller(object):
             bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
             #  task fetches 分开
             task_fetches[i] = {k: v.name for k,v in output_vars[i].items()}
-            fetches[i] = task_fetches[i]
-            fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
+            # fetches[i] = task_fetches[i]
+            # fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
             # print('--------*******--------')
             # print(i)
             # print('---------')
             # print(task_fns)
-            task_loss = layers.switch_case(
+            layers.switch_case(
                 branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
                 branch_fns=task_fns
             )
@@ -606,10 +581,16 @@ class Controller(object):
             # print(task_loss)
             
             # loss = fluid.layers.elementwise_add(loss, task_loss[0])
-            loss += task_loss[0]
-            print(loss)
-            # loss = layers.fill_constant(shape=[1], dtype='int32', value=loss)
-            # print(loss)
+            # 这里task_loss是一个list，组网的时候全都有
+        for k,v in task_loss.items():
+            loss = fluid.layers.concat(v, loss)
+            print(v)
+            
+        loss = fluid.layers.reduce_sum(loss)
+        # fluid.layers.Print(loss, message='loss')
+        print(loss)
+        # loss = layers.fill_constant(shape=[1], dtype='int32', value=loss[0])
+        # print(loss)
 
             
 
@@ -657,6 +638,9 @@ class Controller(object):
         if 'optimizer' in main_conf:
             optim_mod = importlib.import_module(OPTIMIZER_DIR + '.' + main_conf['optimizer'])
             optimize = getattr(optim_mod, OPTIMIZE_METHOD)
+            
+            print('\n\n\n\n\n\n\n !!!!!!')
+            print(loss)
             optimize(loss, main_conf, max_train_steps, warmup_steps, fluid.default_main_program())
 
             loss.persistable = True
@@ -671,7 +655,7 @@ class Controller(object):
         self.saver_program = fluid.default_main_program()
 
         self.main_inst = main_inst
-        self.fetches = fetches
+        #self.fetches = fetches
         self.has_init_train = True
         self.has_init_pred = True
 
