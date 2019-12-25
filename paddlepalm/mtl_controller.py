@@ -414,21 +414,20 @@ class Controller(object):
 
         input_attrs = {}
         net_inputs = {}
+        bb_output_vars = {}
         for id in range(num_instances):
             input_attrs[id] = [[i, j, k] for i, (j,k) in zip(joint_input_names[id], joint_shape_and_dtypes[id])]
             net_inputs[id] = create_net_inputs(input_attrs[id], async=False)
             # net_inputs = create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3)
-        
+            bb_output_vars[id] = train_backbone.build(net_inputs[id], scope_name='__paddlepalm_')
+            assert sorted(bb_output_vars[id].keys()) == sorted(train_backbone.outputs_attr.keys())
         pred_input_attrs = [[i, j, k] for i, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
         
         self._net_inputs = net_inputs
 
         # build backbone and task layers
         train_prog = fluid.default_main_program()
-        train_init_prog = fluid.default_startup_program()
-        bb_output_vars = train_backbone.build(net_inputs, scope_name='__paddlepalm_')
-
-        assert sorted(bb_output_vars.keys()) == sorted(train_backbone.outputs_attr.keys())
+        train_init_prog = fluid.default_startup_program()  
 
         pred_prog = fluid.Program()
         pred_init_prog = fluid.Program()
