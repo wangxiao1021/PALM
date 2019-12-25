@@ -438,36 +438,37 @@ class Controller(object):
 
         fluid.framework.switch_main_program(train_prog)
         fluid.framework.switch_startup_program(train_init_prog)
-
+        task_inputs = {}
         task_output_vars = {}
-        for inst in instances:
-            task_inputs = {'backbone': bb_output_vars}
-            task_inputs_from_reader = _decode_inputs(net_inputs, inst.name)
-            task_inputs['reader'] = task_inputs_from_reader
+        bb_fetches = {}
+        fetches = {}
+        for i in range(num_instances):
+            task_inputs[i] = {'backbone': bb_output_vars[i]}
+            task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
+            task_inputs[i]['reader'] = task_inputs_from_reader
        
-            scope = inst.task_reuse_scope + '/'
+            scope = instances[i].task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
                
-                output_vars = inst.build_task_layer(task_inputs, phase='train', scope=scope)
-                output_vars = {inst.name+'/'+key: val for key, val in output_vars.items()}
-                old = len(task_output_vars) # for debug
-                task_output_vars.update(output_vars)
-                assert len(task_output_vars) - old == len(output_vars) # for debug
+                output_vars = instances[i].build_task_layer(task_inputs, phase='train', scope=scope)
+                output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
+                # old = len(task_output_vars) # for debug
+                task_output_vars[i] = output_vars
+                # assert len(task_output_vars) - old == len(output_vars) # for debug
             # prepare predict vars for saving inference model
-            if inst.is_target:
+            if instances[i].is_target:
                 with fluid.program_guard(pred_prog, pred_init_prog):
-                    cur_inputs = _decode_inputs(pred_net_inputs, inst.name)
-                    inst.pred_input = cur_inputs
+                    cur_inputs = _decode_inputs(pred_net_inputs, instances[i].name)
+                    instances[i].pred_input = cur_inputs
                     pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
-                    scope = inst.task_reuse_scope + '/'
+                    scope = instances[i].task_reuse_scope + '/'
                     with fluid.unique_name.guard(scope):
-                        inst.build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+                        instances[i].build_task_layer(pred_task_inputs, phase='pred', scope=scope)
 
-
-        bb_fetches = {k: v.name for k,v in bb_output_vars.items()}
-        task_fetches = {k: v.name for k,v in task_output_vars.items()}
-        fetches = task_fetches
-        fetches['__task_id'] = net_inputs['__task_id'].name
+            bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
+            task_fetches[i] = {k: v.name for k,v in task_output_vars[i].items()}
+            fetches[i] = task_fetches[i]
+            fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
 
         # compute loss
         task_id_var = net_inputs['__task_id']
