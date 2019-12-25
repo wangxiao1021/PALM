@@ -412,10 +412,15 @@ class Controller(object):
         joint_iterator_fn = create_joint_iterator_fn(iterators, prefixes, joint_shape_and_dtypes, mrs, name_to_position, dev_count=dev_count, verbose=VERBOSE, return_type='dict')
         self._joint_iterator_fn = joint_iterator_fn
 
-        input_attrs = [[i, j, k] for i, (j,k) in zip(joint_input_names, joint_shape_and_dtypes)]
+        input_attrs = {}
+        net_inputs = {}
+        for id in range(num_instances):
+            input_attrs[id] = [[i, j, k] for i, (j,k) in zip(joint_input_names[id], joint_shape_and_dtypes[id])]
+            net_inputs[id] = create_net_inputs(input_attrs[id], async=False)
+            # net_inputs = create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3)
+        
         pred_input_attrs = [[i, j, k] for i, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
-        # net_inputs = create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3)
-        net_inputs = create_net_inputs(input_attrs, async=False)
+        
         self._net_inputs = net_inputs
 
         # build backbone and task layers
