@@ -131,12 +131,12 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
 
             if outname in outname_to_pos[id]:
                 idx = outname_to_pos[id][outname]
-                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=outname+': ')
+                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=outname+': ')
                 result[idx] = val
 
             if task_outname in outname_to_pos[id]:
                 idx = outname_to_pos[id][task_outname]
-                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=task_outname+': ')
+                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=task_outname+': ')
                 result[idx] = val
         results[id] = result
         outbufs[id] = outbuf
@@ -192,14 +192,14 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                         idx = outname_to_pos[id][outname]
                         if v > 0:
                             print(outname + ' is insert in idx ' + str(idx))
-                        val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=outname+': ')
+                        val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=outname+': ')
                         results[idx] = val
 
                     if task_outname in outname_to_pos[id]:
                         idx = outname_to_pos[id][task_outname]
                         if v > 0:
                             print(task_outname + ' is insert in idx ' + str(idx))
-                        val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=task_outname+': ')
+                        val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=task_outname+': ')
                         results[idx] = val
 
                 if v > 0:
