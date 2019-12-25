@@ -138,8 +138,8 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                 idx = outname_to_pos[task_outname]
                 val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=task_outname+': ')
                 result[idx] = val
-        results[i] = result
-        outbufs[i] = outbuf
+        results[id] = result
+        outbufs[id] = outbuf
 
     all_batch = results
     dev_count_bak = dev_count
