@@ -150,7 +150,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
         while True:
             id = np.random.choice(task_ids, p=weights)
             results = all_batch[id]
-            if v joint_iterator_fn> 0:
+            if v > 0:
                 print('----- debug joint iterator -----')
                 print('sampled task id: '+str(id))
             task_id_tensor = np.array([[id]]).astype("int64")
