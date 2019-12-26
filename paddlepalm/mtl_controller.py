@@ -445,12 +445,10 @@ class Controller(object):
         bb_fetches = {}
         task_fetches = {}
         fetches = {}
-        #task_id_var = {}
-        task_loss = {}
-        # losses = fluid.layers.data(name='loss', shape=[1], dtype='float32')
         losses = []
+   
+       
         task_fns = {}
-      
         for i in range(num_instances):
             task_inputs[i] = {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
@@ -464,7 +462,15 @@ class Controller(object):
                 # old = len(task_output_vars) # for debug
                 task_output_vars[i] = output_vars
                 # assert len(task_output_vars) - old == len(output_vars) # for debug
-            # prepare predict vars for saving inference model
+                # prepare predict vars for saving inference model 
+                def get_loss():
+                    s = i
+                    def task_loss():
+                        return task_output_vars[s][instances[s].name+'/loss']
+                    return task_loss
+                task_fns[i] = get_loss()
+                print(task_output_vars[i][instances[i].name+'/loss'])
+               
             if instances[i].is_target:
                 with fluid.program_guard(pred_prog, pred_init_prog):
                     cur_inputs = _decode_inputs(pred_net_inputs, instances[i].name)
@@ -477,58 +483,17 @@ class Controller(object):
             bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
             task_fetches[i] = {k: v.name for k,v in task_output_vars[i].items()}
             fetches[i] = task_fetches[i]
-            #fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
-
-            # compute loss
-            #task_id_var[i] = net_inputs[i]['__task_id']
-            # task_loss[i] = task_output_vars[i][instances[i].name+'/loss']
-            losses.append(task_output_vars[i][instances[i].name+'/loss'])
-            task_loss = layers.reduce_sum(layers.concat(losses))
-            if instances[i].reader_name == 'cls':
-                cls_losses = task_loss
-            elif instances[i].reader_name == 'match':
-                match_losses = task_loss
-            elif instances[i].reader_name == 'mlm':
-                mlm_losses = task_loss
-            elif instances[i].reader_name == 'mrc':
-                mrc_losses = task_loss
-            elif instances[i].reader_name == 'ner':
-                ner_losses = task_loss
-
-            # losses = fluid.layers.concat([losses, task_loss[i]], axis=0)
-        def cls_loss():
-            return cls_losses
-
-        def match_loss():
-            return match_losses
-
-        def mlm_loss():
-            return mlm_losses
-        
-        def mrc_loss():
-            return mrc_losses
-        
-        def ner_loss():
-            return ner_losses
-        
-        for i in range(num_instances):
-            if instances[i].reader_name == 'cls':
-                task_fns[i] = cls_loss
-            elif instances[i].reader_name == 'match':
-                task_fns[i] = match_loss
-            elif instances[i].reader_name == 'mlm':
-                task_fns[i] = mlm_loss
-            elif instances[i].reader_name == 'mrc':
-                task_fns[i] = mrc_loss
-            elif instances[i].reader_name == 'ner':
-                task_fns[i] = ner_loss
-
-        loss = layers.switch_case(
-                branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
+            case = fluid.data(name="case",shape=[1],dtype='int32')
+            print(case)
+            loss = layers.switch_case(
+                branch_index=case,
+                # layers.fill_constant(shape=[1], dtype='int32', value=case),
                 branch_fns=task_fns
             )
-        
+            
+        # loss = layers.reduce_sum(layers.concat(loss))
 
+    
         main_reader = main_inst.reader['train']
 
         num_examples = main_reader.num_examples
@@ -645,9 +610,6 @@ class Controller(object):
             for i in range(dev_count):
                 temp = {}
                 content, id, flag = next(iterator)
-                # print('------flag-------')
-                # print(id)
-                
                 for q, var in net_inputs[id].items():
                     temp[var.name] = content[q]
                 ret.append(temp)
@@ -710,16 +672,15 @@ class Controller(object):
         
         while not train_finish():
             feed, mask, id = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
-            # print('-------------------feed')
-            # print(feed)
-            # print('-------------------mask')
-            # print(mask)
             print('-----------------task')
             print(id)
             print(instances[id].name)
             print('---------------------')
             # print('-------------------fetch_list[id]')
             # print(fetch_list[id])
+            # feed.append()
+            # print(feed)
+            feed[0].update({'case':np.array([id],dtype='int32')})
             rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list[id])
             rt_outputs = {k:v for k,v in zip(fetch_names[i], rt_outputs[i])}
             # rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
