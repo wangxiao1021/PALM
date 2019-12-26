@@ -38,7 +38,7 @@ class TaskInstance(object):
         check_req_args(config, name)
 
         # parse Reader and Paradigm
-        reader_name = config['reader']
+        self.reader_name = config['reader']
         reader_mod = importlib.import_module(READER_DIR + '.' + reader_name)
         Reader = getattr(reader_mod, 'Reader')
 

@@ -449,6 +449,8 @@ class Controller(object):
         task_loss = {}
         # losses = fluid.layers.data(name='loss', shape=[1], dtype='float32')
         losses = []
+        task_fns = {}
+      
         for i in range(num_instances):
             task_inputs[i] = {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
@@ -481,8 +483,51 @@ class Controller(object):
             #task_id_var[i] = net_inputs[i]['__task_id']
             # task_loss[i] = task_output_vars[i][instances[i].name+'/loss']
             losses.append(task_output_vars[i][instances[i].name+'/loss'])
+            task_loss = layers.reduce_sum(layers.concat(losses))
+            if instances[i].reader_name == 'cls':
+                cls_losses = task_loss
+            elif instances[i].reader_name == 'match':
+                match_losses = task_loss
+            elif instances[i].reader_name == 'mlm':
+                mlm_losses = task_loss
+            elif instances[i].reader_name == 'mrc':
+                mrc_losses = task_loss
+            elif instances[i].reader_name == 'ner':
+                ner_losses = task_loss
+
             # losses = fluid.layers.concat([losses, task_loss[i]], axis=0)
-        loss = layers.reduce_sum(layers.concat(losses))
+        def cls_loss():
+            return cls_losses
+
+        def match_loss():
+            return match_losses
+
+        def mlm_loss():
+            return mlm_losses
+        
+        def mrc_loss():
+            return mrc_losses
+        
+        def ner_loss():
+            return ner_losses
+        
+        for i in range(num_instances):
+            if instances[i].reader_name == 'cls':
+                task_fns[i] = cls_loss
+            elif instances[i].reader_name == 'match':
+                task_fns[i] = match_loss
+            elif instances[i].reader_name == 'mlm':
+                task_fns[i] = mlm_loss
+            elif instances[i].reader_name == 'mrc':
+                task_fns[i] = mrc_loss
+            elif instances[i].reader_name == 'ner':
+                task_fns[i] = ner_loss
+
+        loss = layers.switch_case(
+                branch_index=layers.fill_constant(shape=[1], dtype='int32', value=i),
+                branch_fns=task_fns
+            )
+        
 
         main_reader = main_inst.reader['train']
 
