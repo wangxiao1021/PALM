@@ -34,6 +34,7 @@ class TaskInstance(object):
         self._name = name
         self._config = config
         self._verbose = verbose
+        self._id = id
 
         check_req_args(config, name)
 
@@ -136,6 +137,10 @@ class TaskInstance(object):
     @property
     def name(self):
         return self._name
+
+    @property
+    def tid(self):
+        return self._id
 
     @property
     def Reader(self):

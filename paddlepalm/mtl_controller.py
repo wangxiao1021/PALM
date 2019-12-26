@@ -449,6 +449,7 @@ class Controller(object):
    
        
         task_fns = {}
+        loss_vars = []
         for i in range(num_instances):
             task_inputs[i] = {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
@@ -459,17 +460,16 @@ class Controller(object):
                
                 output_vars = instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope)
                 output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
+                loss_var = output_vars[instances[i].name+'/loss']
+                loss_vars.append(loss_var)
                 # old = len(task_output_vars) # for debug
                 task_output_vars[i] = output_vars
                 # assert len(task_output_vars) - old == len(output_vars) # for debug
                 # prepare predict vars for saving inference model 
-                def get_loss():
-                    s = i
-                    def task_loss():
-                        return task_output_vars[s][instances[s].name+'/loss']
-                    return task_loss
-                task_fns[i] = get_loss()
-                print(task_output_vars[i][instances[i].name+'/loss'])
+                # def task_loss():
+                #     return loss_var
+                task_fns[instances[i].tid] = loss_var
+                
                
             if instances[i].is_target:
                 with fluid.program_guard(pred_prog, pred_init_prog):
@@ -483,13 +483,20 @@ class Controller(object):
             bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
             task_fetches[i] = {k: v.name for k,v in task_output_vars[i].items()}
             fetches[i] = task_fetches[i]
-            case = fluid.data(name="case",shape=[1],dtype='int32')
-            print(case)
-            loss = layers.switch_case(
-                branch_index=case,
-                # layers.fill_constant(shape=[1], dtype='int32', value=case),
-                branch_fns=task_fns
-            )
+
+        case = fluid.data(name="case",shape=[1],dtype='int32')
+        
+        new_task_fns = {}
+        for key, val in task_fns.items():
+            new_task_fns[key] = lambda :val
+
+        # loss =layers.reduce_mean(layers.concat(loss_vars))
+        fluid.layers.Print(case, message='case')
+        loss = layers.switch_case(
+            branch_index=case,
+            # layers.fill_constant(shape=[1], dtype='int32', value=case),
+            branch_fns=new_task_fns
+        )
             
         # loss = layers.reduce_sum(layers.concat(loss))
 
@@ -513,17 +520,17 @@ class Controller(object):
         else:
             warmup_steps = 0
 
-        # build optimizer
-        if 'optimizer' in main_conf:
-            optim_mod = importlib.import_module(OPTIMIZER_DIR + '.' + main_conf['optimizer'])
-            optimize = getattr(optim_mod, OPTIMIZE_METHOD)
-            optimize(loss, main_conf, max_train_steps, warmup_steps, fluid.default_main_program())
+        # # build optimizer
+        # if 'optimizer' in main_conf:
+        #     optim_mod = importlib.import_module(OPTIMIZER_DIR + '.' + main_conf['optimizer'])
+        #     optimize = getattr(optim_mod, OPTIMIZE_METHOD)
+        #     optimize(loss, main_conf, max_train_steps, warmup_steps, fluid.default_main_program())
 
-            loss.persistable = True
-            if main_conf.get('use_ema', False):
-                assert 'ema_decay' in main_conf, "ema_decay should be set when use_ema is enabled."
-                ema = fluid.optimizer.ExponentialMovingAverage(main_conf['ema_decay'])
-                ema.update()
+        #     loss.persistable = True
+        #     if main_conf.get('use_ema', False):
+        #         assert 'ema_decay' in main_conf, "ema_decay should be set when use_ema is enabled."
+        #         ema = fluid.optimizer.ExponentialMovingAverage(main_conf['ema_decay'])
+        #         ema.update()
 
         # prepare for train
         self.train_backbone = train_backbone
