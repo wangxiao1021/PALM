@@ -39,7 +39,7 @@ class TaskInstance(object):
 
         # parse Reader and Paradigm
         self.reader_name = config['reader']
-        reader_mod = importlib.import_module(READER_DIR + '.' + reader_name)
+        reader_mod = importlib.import_module(READER_DIR + '.' + self.reader_name)
         Reader = getattr(reader_mod, 'Reader')
 
         parad_name = config['paradigm']
