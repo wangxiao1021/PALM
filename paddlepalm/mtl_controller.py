@@ -445,9 +445,10 @@ class Controller(object):
         bb_fetches = {}
         task_fetches = {}
         fetches = {}
-        task_id_var = {}
+        #task_id_var = {}
         task_loss = {}
-        losses = fluid.layers.data(name='loss', shape=[1], dtype='float32')
+        # losses = fluid.layers.data(name='loss', shape=[1], dtype='float32')
+        losses = []
         for i in range(num_instances):
             task_inputs[i] = {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
@@ -474,13 +475,14 @@ class Controller(object):
             bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
             task_fetches[i] = {k: v.name for k,v in task_output_vars[i].items()}
             fetches[i] = task_fetches[i]
-            fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
+            #fetches[i]['__task_id'] = net_inputs[i]['__task_id'].name
 
             # compute loss
-            task_id_var[i] = net_inputs[i]['__task_id']
-            task_loss[i] = task_output_vars[i][instances[i].name+'/loss']
-            losses = fluid.layers.concat([losses, task_loss[i]], axis=0)
-        loss = layers.reduce_sum(losses)
+            #task_id_var[i] = net_inputs[i]['__task_id']
+            # task_loss[i] = task_output_vars[i][instances[i].name+'/loss']
+            losses.append(task_output_vars[i][instances[i].name+'/loss'])
+            # losses = fluid.layers.concat([losses, task_loss[i]], axis=0)
+        loss = layers.reduce_sum(layers.concat(losses))
 
         main_reader = main_inst.reader['train']
 
@@ -598,15 +600,14 @@ class Controller(object):
             for i in range(dev_count):
                 temp = {}
                 content, id, flag = next(iterator)
-                print(content)
-                print('****')
-                print(flag)
+                # print('------flag-------')
+                # print(id)
                 
                 for q, var in net_inputs[id].items():
                     temp[var.name] = content[q]
                 ret.append(temp)
                 mask.append(1 if flag else 0)
-            return ret, mask
+            return ret, mask, id
 
         # do training
         fetch_names = {}
@@ -647,12 +648,8 @@ class Controller(object):
             while True:
                 ret = queue.get()
                 if ret is not None:
-                    
                     batches, num_pad = ret
-                    id = np.squeeze(batches['__task_id']).tolist()
-                    print(ret)
-                    print('********')
-                    print(id)
+                    id = batches[0]['__task_id'][0][0]
                     queue.task_done()
                     for batch in batches:
                         flag = num_pad == 0
@@ -667,16 +664,21 @@ class Controller(object):
         joint_iterator = multi_dev_reader(self._joint_iterator_fn, self.dev_count)
         
         while not train_finish():
-            feed={}
-            mask={}
-            rt_outputs={}
-            # 这边感觉不该遍历
-            # for i in range(num_instances):
-            feed, mask = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
-            rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list)
+            feed, mask, id = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
+            # print('-------------------feed')
+            # print(feed)
+            # print('-------------------mask')
+            # print(mask)
+            print('-------------------id')
+            print(id)
+            print(instances[id].name)
+            # print('-------------------fetch_list[id]')
+            # print(fetch_list[id])
+            rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list[id])
             rt_outputs = {k:v for k,v in zip(fetch_names[i], rt_outputs[i])}
-            rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
-            rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id
+            # rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
+            # rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id
+            rt_task_id = id
             cur_task = instances[rt_task_id]
 
             backbone_rt_outputs = {k:v for k,v in rt_outputs.items() if '/' not in k}
