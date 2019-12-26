@@ -215,7 +215,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                     temp = {}
                     for pos, i in enumerate(results):
                         temp[pos_to_outname[id][pos]] = i
-                    yield temp, id
+                    yield temp
 
     return iterator
 

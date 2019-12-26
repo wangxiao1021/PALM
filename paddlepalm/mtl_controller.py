@@ -593,25 +593,20 @@ class Controller(object):
             return True
 
         def pack_multicard_feed(iterator, net_inputs, dev_count):
-            rets = {}
-            masks = {}
+            ret = []
+            mask = []
             for i in range(dev_count):
+                temp = {}
+                content, id, flag = next(iterator)
+                print(content)
+                print('****')
+                print(flag)
                 
-                for i ,v in net_inputs.items():
-                    temp = {}
-                    content, id, flag = next(iterator)
-                    print(content)
-                    print('****')
-                    print(flag)
-                    ret = []
-                    mask = []
-                    for q, var in v.items():
-                        temp[var.name] = content[q]
-                    ret.append(temp)
-                    mask.append(1 if flag else 0)
-                    rets[i] = ret
-                    masks[i] = mask
-            return rets, masks
+                for q, var in net_inputs[id].items():
+                    temp[var.name] = content[q]
+                ret.append(temp)
+                mask.append(1 if flag else 0)
+            return ret, mask
 
         # do training
         fetch_names = {}
@@ -652,13 +647,18 @@ class Controller(object):
             while True:
                 ret = queue.get()
                 if ret is not None:
+                    
                     batches, num_pad = ret
+                    id = np.squeeze(batches['__task_id']).tolist()
+                    print(ret)
+                    print('********')
+                    print(id)
                     queue.task_done()
                     for batch in batches:
                         flag = num_pad == 0
                         if num_pad > 0:
                             num_pad -= 1
-                        yield batch, flag
+                        yield batch, id, flag
                 else:
                     break
             queue.join()
