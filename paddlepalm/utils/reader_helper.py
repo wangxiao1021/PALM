@@ -150,7 +150,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
         while True:
             id = np.random.choice(task_ids, p=weights)
             results = all_batch[id]
-            if v > 0:
+            if v joint_iterator_fn> 0:
                 print('----- debug joint iterator -----')
                 print('sampled task id: '+str(id))
             task_id_tensor = np.array([[id]]).astype("int64")
@@ -215,7 +215,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                     temp = {}
                     for pos, i in enumerate(results):
                         temp[pos_to_outname[id][pos]] = i
-                    yield temp
+                    yield temp, id
 
     return iterator
 

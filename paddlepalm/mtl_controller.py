@@ -40,6 +40,8 @@ from threading import Thread
 
 DEBUG=False
 VERBOSE=0
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 def _get_basename(f):
     return os.path.splitext(f)[0]
@@ -445,7 +447,7 @@ class Controller(object):
         fetches = {}
         task_id_var = {}
         task_loss = {}
-        loss = fluid.layers.data(name='loss', shape=[1], dtype='float32')
+        losses = fluid.layers.data(name='loss', shape=[1], dtype='float32')
         for i in range(num_instances):
             task_inputs[i] = {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
@@ -477,8 +479,8 @@ class Controller(object):
             # compute loss
             task_id_var[i] = net_inputs[i]['__task_id']
             task_loss[i] = task_output_vars[i][instances[i].name+'/loss']
-            losses = fluid.layers.concat([task_loss[i], loss], axis=0)
-            loss = layers.reduce_sum(losses)
+            losses = fluid.layers.concat([losses, task_loss[i]], axis=0)
+        loss = layers.reduce_sum(losses)
 
         main_reader = main_inst.reader['train']
 
@@ -591,19 +593,31 @@ class Controller(object):
             return True
 
         def pack_multicard_feed(iterator, net_inputs, dev_count):
-            ret = []
-            mask = []
+            rets = {}
+            masks = {}
             for i in range(dev_count):
-                temp = {}
-                content, flag = next(iterator)
-                for q, var in net_inputs.items():
-                    temp[var.name] = content[q]
-                ret.append(temp)
-                mask.append(1 if flag else 0)
-            return ret, mask
+                
+                for i ,v in net_inputs.items():
+                    temp = {}
+                    content, id, flag = next(iterator)
+                    print(content)
+                    print('****')
+                    print(flag)
+                    ret = []
+                    mask = []
+                    for q, var in v.items():
+                        temp[var.name] = content[q]
+                    ret.append(temp)
+                    mask.append(1 if flag else 0)
+                    rets[i] = ret
+                    masks[i] = mask
+            return rets, masks
 
         # do training
-        fetch_names, fetch_list = zip(*fetches.items())
+        fetch_names = {}
+        fetch_list = {}
+        for i in range(num_instances):
+            fetch_names[i], fetch_list[i] = zip(*fetches[i].items())
 
         main_step = 0 # only count for main task
         global_step = 0 # count for all tasks
@@ -649,12 +663,18 @@ class Controller(object):
                     break
             queue.join()
         
+
         joint_iterator = multi_dev_reader(self._joint_iterator_fn, self.dev_count)
         
         while not train_finish():
+            feed={}
+            mask={}
+            rt_outputs={}
+            # 这边感觉不该遍历
+            # for i in range(num_instances):
             feed, mask = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
             rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list)
-            rt_outputs = {k:v for k,v in zip(fetch_names, rt_outputs)}
+            rt_outputs = {k:v for k,v in zip(fetch_names[i], rt_outputs[i])}
             rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
             rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id
             cur_task = instances[rt_task_id]
