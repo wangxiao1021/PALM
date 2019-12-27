@@ -435,6 +435,7 @@ class Controller(object):
         pred_input_attrs = [[i, j, k] for i, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
         pred_prog = fluid.Program()
         pred_init_prog = fluid.Program()
+        self._pred_prog = pred_prog
 
         with fluid.program_guard(main_program = pred_prog, startup_program = pred_init_prog):
            pred_net_inputs = create_net_inputs(pred_input_attrs)
@@ -472,7 +473,7 @@ class Controller(object):
             task_inputs[i] = {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
             task_inputs[i]['reader'] = task_inputs_from_reader
-    
+        
             scope = instances[i].task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
           
@@ -496,7 +497,12 @@ class Controller(object):
             return loss_var[i]
 
         # loss =layers.reduce_mean(layers.concat(loss_vars))
-        task_fns = {0: lambda:get_loss(0), 1: lambda:get_loss(1), 2: lambda:get_loss(2)}
+         for i in range(num_instances):
+                       def task_loss():
+                                       task_id = i
+                                                       return lambda: get_loss(task_id)
+                                                                   task_fns[i] = task_loss()
+        #task_fns = {0: lambda:get_loss(0), 1: lambda:get_loss(1), 2: lambda:get_loss(2)}
         #task_fns = {0: lambda:get_loss(0)}
         #fluid.layers.Print(case, message='case')
         loss  = layers.switch_case(
@@ -687,23 +693,29 @@ class Controller(object):
         
         while not train_finish():
             feed, mask, id = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
-            #print('-----------------task')
-            #print(id)
-            #print(instances[id].name)
-            #print('---------------------')
+            print('-----------------task')
+            print(id)
+            print(instances[id].name)
+            print('---------------------')
             # print('-------------------fetch_list[id]')
             # print(fetch_list[id])
             # feed.append()
             # print(feed)
+            #rt_preg = self.exe.run(self._pred_prog, feed=feed, fetch_list=fetch_list)
             feed[0].update({'case':np.array([id],dtype='int32')})
             fetch_list.append(self._switched_loss)
+            
             rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list)
+            #del feed[0]['__task_id']
+            #del feed[0]['case']
+            #del feed[0]['batchsize_x_seqlen']
+            rt_preg = self.exe.run(self._pred_prog, feed=next(instances[id].reader['train'].iterator()), fetch_list=fetch_list)
             rt_loss = rt_outputs.pop()
             rt_outputs = {k:v for k,v in zip(fetch_names, rt_outputs)}
             # rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
             # rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id
-            rt_task_id = id
-            cur_task = instances[rt_task_id]
+            #rt_task_id = id
+            cur_task = instances[id]
 
             # backbone_rt_outputs = {k:v for k,v in rt_outputs.items() if '/' not in k}
             # backbone_buffer.append(backbone.postprocess(backbone_rt_outputs))
@@ -716,7 +728,7 @@ class Controller(object):
 
             cur_task_global_step = cur_task.cur_train_step + cur_task.cur_train_epoch * cur_task.steps_pur_epoch
             if cur_task.is_target and cur_task.save_infermodel_every_n_steps > 0 and cur_task_global_step % cur_task.save_infermodel_every_n_steps == 0:
-                cur_task.save(suffix='.step'+str(cur_task_global_step))
+                cur_task.save(suffix='.step'+str(cur_task_global_step), prog=self._pred_prog)
 
             if global_step % main_conf.get('print_every_n_steps', 5) == 0:
                 # loss = rt_outputs[cur_task.name+'/loss']
@@ -733,7 +745,7 @@ class Controller(object):
 
             if cur_task.train_finish and cur_task.cur_train_step + cur_task.cur_train_epoch * cur_task.steps_pur_epoch == cur_task.expected_train_steps:
                 print(cur_task.name+': train finished!')
-                cur_task.save()
+                cur_task.save(prog=self._pred_prog)
 
             if 'save_ckpt_every_n_steps' in main_conf and global_step % main_conf['save_ckpt_every_n_steps'] == 0:
                 save_path = os.path.join(main_conf['save_path'], 'ckpt', 

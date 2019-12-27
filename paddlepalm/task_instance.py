@@ -105,13 +105,22 @@ class TaskInstance(object):
     def epoch_postprocess(self, epoch_inputs, phase):
         return self._task_layer[phase].epoch_postprocess(epoch_inputs)
     
-    def save(self, suffix=''):
+    def save(self, suffix='', prog=None):
         dirpath = self._save_infermodel_path + suffix
         self._pred_input_varname_list = [str(i) for i in self._pred_input_varname_list]
 
         # fluid.io.save_inference_model(dirpath, self._pred_input_varname_list, self._pred_fetch_var_list, self._exe, export_for_deployment = True)
-        prog = fluid.default_main_program().clone()
-        fluid.io.save_inference_model(dirpath, self._pred_input_varname_list, self._pred_fetch_var_list, self._exe, prog)
+        # prog = fluid.default_main_program().clone()
+        if prog is not None:
+            save_prog = prog
+            print('i am inference prog!!!!!')
+            print('i am inference prog!!!!!')
+            print('i am inference prog!!!!!')
+            print('i am inference prog!!!!!')
+        else:
+            save_prog = fluid.default_main_program().clone()
+
+        fluid.io.save_inference_model(dirpath, self._pred_input_varname_list, self._pred_fetch_var_list, self._exe, save_prog)
 
         conf = {}
         for k, strv in self._save_protocol.items(): 
