@@ -457,18 +457,24 @@ class Controller(object):
        
             scope = instances[i].task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
-               
-                output_vars = instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope)
-                output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
-                loss_var = output_vars[instances[i].name+'/loss']
-                loss_vars.append(loss_var)
+                def task_loss():
+                  s = i;   
+                  def get_loss():
+                    output_vars = instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope)
+                    output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
+                    loss_var = output_vars[instances[i].name+'/loss']
+                    task_output_vars[s] = output_vars
+                    return loss_var
+                  return get_loss
+                task_fns[i] = task_loss()
+                    #loss_vars.append(loss_var)
                 # old = len(task_output_vars) # for debug
-                task_output_vars[i] = output_vars
+                #task_output_vars[i] = output_vars
                 # assert len(task_output_vars) - old == len(output_vars) # for debug
                 # prepare predict vars for saving inference model 
                 # def task_loss():
                 #     return loss_var
-                task_fns[instances[i].tid] = loss_var
+                #task_fns[instances[i].tid] = loss_var
                 
                
             if instances[i].is_target:
@@ -486,16 +492,16 @@ class Controller(object):
 
         case = fluid.data(name="case",shape=[1],dtype='int32')
         
-        new_task_fns = {}
-        for key, val in task_fns.items():
-            new_task_fns[key] = lambda :val
+        #new_task_fns = {}
+        #for key, val in task_fns.items():
+         #   new_task_fns[key] = lambda :val
 
         # loss =layers.reduce_mean(layers.concat(loss_vars))
         fluid.layers.Print(case, message='case')
         loss = layers.switch_case(
             branch_index=case,
             # layers.fill_constant(shape=[1], dtype='int32', value=case),
-            branch_fns=new_task_fns
+            branch_fns=task_fns
         )
             
         # loss = layers.reduce_sum(layers.concat(loss))
