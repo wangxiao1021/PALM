@@ -353,50 +353,53 @@ class Controller(object):
         # create reader, task
         # then check i/o across reader, backbone and task_layer
         
-        check_fns = {}
-        for s in range(num_instances):
-            def check_tasks():
-                i = s 
-                def checkeach():
-                    task_attrs = {}
-                    pred_task_attrs = []
-                    joint_input_names = {}
-                    joint_shape_and_dtypes = {}
-                    name_to_position = {}
-                    train_reader = instances[i].Reader(instances[i].config, phase='train')
-                    instances[i].reader['train'] = train_reader
-                    train_parad = instances[i].Paradigm(instances[i].config, phase='train', backbone_config=bb_conf)
-                    instances[i].task_layer['train'] = train_parad
-                    task_attr_from_reader = _encode_inputs(train_parad.inputs_attrs['reader'], instances[i].name)
-                    task_attrs[i] = task_attr_from_reader
+        # check_fns = {}
+        task_attrs = {}
+        pred_task_attrs = []
+        joint_input_names = {}
+        joint_shape_and_dtypes = {}
+        name_to_position = {}
+        for i in range(num_instances):
+            # def check_tasks():
+            #     i = s 
+            #     def checkeach():
+                    
+            train_reader = instances[i].Reader(instances[i].config, phase='train')
+            instances[i].reader['train'] = train_reader
+            train_parad = instances[i].Paradigm(instances[i].config, phase='train', backbone_config=bb_conf)
+            instances[i].task_layer['train'] = train_parad
+            task_attr_from_reader = _encode_inputs(train_parad.inputs_attrs['reader'], instances[i].name)
+            task_attrs[i] = task_attr_from_reader
 
-                    _check_io(train_backbone.inputs_attr, train_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.train')
-                    _check_io(train_parad.inputs_attrs['reader'], train_reader.outputs_attr, in_name='task_paradigm.train.reader', out_name='reader.train')
-                    _check_io(train_parad.inputs_attrs['backbone'], train_backbone.outputs_attr, in_name='task_paradigm.train.backbone', out_name=bb_name+'_backbone')
-                    # merge reader input attrs from backbone and task_instances
-                    joint_input_names[i], joint_shape_and_dtypes[i], name_to_position[i] = merge_input_attrs(train_backbone.inputs_attr, task_attrs[i])
-                    pred_joint_input_names = []
-                    pred_joint_shape_and_dtypes = []
-                    if instances[i].is_target:
-                        if 'pred_file' not in instances[i].config:
-                            instances[i].config['pred_file'] = ''
-                        pred_reader = instances[i].Reader(instances[i].config, phase='pred')
-                        pred_parad = instances[i].Paradigm(instances[i].config, phase='pred', backbone_config=bb_conf)
-                        instances[i].task_layer['pred'] = pred_parad
-                        task_attr_from_reader = _encode_inputs(pred_parad.inputs_attrs['reader'], instances[i].name)
-                        pred_task_attrs.append(task_attr_from_reader)
-                        _check_io(pred_backbone.inputs_attr, pred_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.pred')
-                        _check_io(pred_parad.inputs_attrs['reader'], pred_reader.outputs_attr, in_name='task_paradigm.pred.reader', out_name='reader.pred')
-                        _check_io(pred_parad.inputs_attrs['backbone'], pred_backbone.outputs_attr, in_name='task_paradigm.pred.backbone', out_name=bb_name+'_backbone')
-                        pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, pred_task_attrs, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
-                    return joint_input_names[i], joint_shape_and_dtypes[i], name_to_position[i], pred_joint_input_names, pred_joint_shape_and_dtypes
-                  return checkeach
-                check_fns[i] = check_tasks()
-        joint_input_names, joint_shape_and_dtypes, name_to_position, pred_joint_input_names, pred_joint_shape_and_dtypes = layers.switch_case(
-            branch_index=case,
-            # layers.fill_constant(shape=[1], dtype='int32', value=case),
-            branch_fns=check_fns
-        )
+            _check_io(train_backbone.inputs_attr, train_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.train')
+            _check_io(train_parad.inputs_attrs['reader'], train_reader.outputs_attr, in_name='task_paradigm.train.reader', out_name='reader.train')
+            _check_io(train_parad.inputs_attrs['backbone'], train_backbone.outputs_attr, in_name='task_paradigm.train.backbone', out_name=bb_name+'_backbone')
+            # merge reader input attrs from backbone and task_instances
+            joint_input_names[i], joint_shape_and_dtypes[i], name_to_position[i] = merge_input_attrs(train_backbone.inputs_attr, task_attrs[i])
+            pred_joint_input_names = []
+            pred_joint_shape_and_dtypes = []
+            if instances[i].is_target:
+                if 'pred_file' not in instances[i].config:
+                    instances[i].config['pred_file'] = ''
+                pred_reader = instances[i].Reader(instances[i].config, phase='pred')
+                pred_parad = instances[i].Paradigm(instances[i].config, phase='pred', backbone_config=bb_conf)
+                instances[i].task_layer['pred'] = pred_parad
+                task_attr_from_reader = _encode_inputs(pred_parad.inputs_attrs['reader'], instances[i].name)
+                pred_task_attrs.append(task_attr_from_reader)
+                _check_io(pred_backbone.inputs_attr, pred_reader.outputs_attr, in_name=bb_name+'_backbone', out_name='reader.pred')
+                _check_io(pred_parad.inputs_attrs['reader'], pred_reader.outputs_attr, in_name='task_paradigm.pred.reader', out_name='reader.pred')
+                _check_io(pred_parad.inputs_attrs['backbone'], pred_backbone.outputs_attr, in_name='task_paradigm.pred.backbone', out_name=bb_name+'_backbone')
+                pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, pred_task_attrs, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
+                #     return joint_input_names[i], joint_shape_and_dtypes[i], name_to_position[i], pred_joint_input_names, pred_joint_shape_and_dtypes
+                #   return checkeach
+                # check_fns[i] = check_tasks()
+        # pred_joint_input_names, pred_joint_shape_and_dtypes, _ = merge_input_attrs(pred_backbone.inputs_attr, pred_task_attrs, insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
+               
+        # joint_input_names, joint_shape_and_dtypes, name_to_position, pred_joint_input_names, pred_joint_shape_and_dtypes = layers.switch_case(
+        #     branch_index=case,
+        #     # layers.fill_constant(shape=[1], dtype='int32', value=case),
+        #     branch_fns=check_fns
+        # )
             
         # shapes: [task_id, shapes_of_backbone, shapes_of_inst1, ..., shapes_of_instN]
 
@@ -417,6 +420,7 @@ class Controller(object):
                     instances[i].reader['train'].load_data()
                     print('ok!')
             return loadeach
+        data_fns[s]=load_data()
         layers.switch_case(
             branch_index=case,
             # layers.fill_constant(shape=[1], dtype='int32', value=case),
@@ -441,12 +445,28 @@ class Controller(object):
         input_attrs = {}
         net_inputs = {}
         bb_output_vars = {}
-        for id in range(num_instances):
-            input_attrs[id] = [[i, j, k] for i, (j,k) in zip(joint_input_names[id], joint_shape_and_dtypes[id])]
-            net_inputs[id] = create_net_inputs(input_attrs[id], async=False)
-            # net_inputs = create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3)
-            bb_output_vars[id] = train_backbone.build(net_inputs[id], scope_name='__paddlepalm_')
-            assert sorted(bb_output_vars[id].keys()) == sorted(train_backbone.outputs_attr.keys())
+        bb_output_fns = {}
+        for s in range(num_instances):
+            
+            def bb_outputs():
+                id = s 
+                def bb_out():
+                    input_attrs[id] = [[i, j, k] for i, (j,k) in zip(joint_input_names[id], joint_shape_and_dtypes[id])]
+                    net_inputs[id] = create_net_inputs(input_attrs[id], async=False)
+                    # net_inputs = create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3)
+                    bb_output_vars[id] = train_backbone.build(net_inputs[id], scope_name='__paddlepalm_')
+                    assert sorted(bb_output_vars[id].keys()) == sorted(train_backbone.outputs_attr.keys())
+                    return bb_output_vars[id], id
+            return bb_out
+            bb_output_fns[s] = bb_outpus()
+            
+        
+        bb_output_var, id= layers.switch_case(
+            branch_index=case,
+            # layers.fill_constant(shape=[1], dtype='int32', value=case),
+            branch_fns=bb_output_fns
+        )
+        bb_output_vars[id] = bb_output_var
         pred_input_attrs = [[i, j, k] for i, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
         
         self._net_inputs = net_inputs
@@ -478,7 +498,7 @@ class Controller(object):
             def task_loss():
                 i = s
                 def get_loss():
-                    task_inputs[i] = {'backbone': bb_output_vars[i]}
+                    task_inputs[i] = {'backbone': bb_output_vars}
                     task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
                     task_inputs[i]['reader'] = task_inputs_from_reader
             
@@ -488,7 +508,19 @@ class Controller(object):
                         output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
                         loss_var = output_vars[instances[i].name+'/loss']
                         task_output_vars[i] = output_vars
-                return loss_var
+                    if instances[i].is_target:
+                        with fluid.program_guard(pred_prog, pred_init_prog):
+                            cur_inputs = _decode_inputs(pred_net_inputs, instances[i].name)
+                            instances[i].pred_input = cur_inputs
+                            pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
+                            scope = instances[i].task_reuse_scope + '/'
+                            with fluid.unique_name.guard(scope):
+                                instances[i].build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+
+                    bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
+                    task_fetches[i] = {k: v.name for k,v in task_output_vars[i].items()}
+                    fetches[i] = task_fetches[i]
+                return loss_var, bb_fetches[i],task_fetches[i],fetches[i] ,i 
             return get_loss
             task_fns[i] = task_loss()
                     #loss_vars.append(loss_var)
@@ -501,18 +533,7 @@ class Controller(object):
                 #task_fns[instances[i].tid] = loss_var
                 
                
-            if instances[i].is_target:
-                with fluid.program_guard(pred_prog, pred_init_prog):
-                    cur_inputs = _decode_inputs(pred_net_inputs, instances[i].name)
-                    instances[i].pred_input = cur_inputs
-                    pred_task_inputs = {'backbone': pred_bb_output_vars, 'reader': cur_inputs}
-                    scope = instances[i].task_reuse_scope + '/'
-                    with fluid.unique_name.guard(scope):
-                        instances[i].build_task_layer(pred_task_inputs, phase='pred', scope=scope)
-
-            bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
-            task_fetches[i] = {k: v.name for k,v in task_output_vars[i].items()}
-            fetches[i] = task_fetches[i]
+            
 
        
         
@@ -522,12 +543,14 @@ class Controller(object):
 
         # loss =layers.reduce_mean(layers.concat(loss_vars))
         fluid.layers.Print(case, message='case')
-        loss = layers.switch_case(
+        loss, b_f,t_f,f,i  = layers.switch_case(
             branch_index=case,
             # layers.fill_constant(shape=[1], dtype='int32', value=case),
             branch_fns=task_fns
         )
-            
+        bb_fetches[i] = b_f
+        task_fetches[i] = t_f 
+        fetches[i] = f
         # loss = layers.reduce_sum(layers.concat(loss))
 
     
