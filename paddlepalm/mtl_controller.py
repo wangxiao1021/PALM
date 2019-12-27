@@ -489,8 +489,8 @@ class Controller(object):
             return loss_var[i]
 
         # loss =layers.reduce_mean(layers.concat(loss_vars))
-        task_fns = {0: lambda:get_loss(0), 1: lambda:get_loss(1), 2: lambda:get_loss(2)}
-        # task_fns = {0: lambda:get_loss(0)}
+        # task_fns = {0: lambda:get_loss(0), 1: lambda:get_loss(1), 2: lambda:get_loss(2)}
+        task_fns = {0: lambda:get_loss(0)}
         # fluid.layers.Print(case, message='case')
         loss  = layers.switch_case(
             branch_index=case,

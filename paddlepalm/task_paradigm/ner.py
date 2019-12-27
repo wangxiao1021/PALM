@@ -60,9 +60,11 @@ class TaskParadigm(task_paradigm):
             return {'logits': [[-1, self.num_classes], 'float32']}
 
     def build(self, inputs, scope_name=''):
-        token_emb = inputs['backbone']['encoder_outputs']
-        seq_lens = fluid.data(
-            name='seq_lens', shape=[-1], dtype='int64', lod_level=0)
+        # token_emb = inputs['backbone']['encoder_outputs']
+        # token_emb = 
+        seq_lens = inputs['backbone']['encoder_outputs']
+        # seq_lens = fluid.data(
+        #     name='seq_lens', shape=[-1], dtype='int64', lod_level=0)
         if self._is_training:
             label_ids = inputs['reader']['label_ids']
             # squeeze_labels = fluid.layers.squeeze(padded_labels, axes=[-1])
@@ -104,8 +106,7 @@ class TaskParadigm(task_paradigm):
                 label=label_ids,
                 param_attr=fluid.ParamAttr(
                     # initializer=self._param_initializer,
-                    name=scope_name+'crfw', learning_rate=self.learning_rate),
-                length=seq_lens)
+                    name=scope_name+'crfw', learning_rate=self.learning_rate), length=seq_lens)
 
             avg_cost = fluid.layers.mean(x=crf_cost)
             crf_decode = fluid.layers.crf_decoding(
