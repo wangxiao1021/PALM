@@ -443,19 +443,9 @@ class Controller(object):
 
         task_inputs = {}
         task_output_vars = {}
-        bb_fetches = {}
-        task_fetches = {}
-        fetches = {}
         task_fns = {}
-        loss_var = {}
+
         def get_loss(i):
-
-        # prepare predict vars for saving inference model
-            pred_input_attrs = [[m, j, k] for m, (j,k) in zip(pred_joint_input_names, pred_joint_shape_and_dtypes)]
-
-            train_prog = fluid.default_main_program()
-            train_init_prog = fluid.default_startup_program()  
-
             input_attrs[i] = [[m, j, k] for m, (j,k) in zip(joint_input_names[i], joint_shape_and_dtypes[i])]
             net_inputs[i] = create_net_inputs(input_attrs[i], async=False)
             # net_inputs = create_net_inputs(input_attrs, async=True, iterator_fn=joint_iterator_fn, dev_count=dev_count, n_prefetch=3)
@@ -463,24 +453,17 @@ class Controller(object):
             assert sorted(bb_output_vars[i].keys()) == sorted(train_backbone.outputs_attr.keys())
 
             # build backbone and task layers
-            #train_prog = fluid.default_main_program()
-            #train_init_prog = fluid.default_startup_program()  
-
-            # fluid.framework.switch_main_program(train_prog)
-            # fluid.framework.switch_startup_program(train_init_prog)
-        
-  
             task_inputs[i] = {'backbone': bb_output_vars[i]}
             task_inputs_from_reader = _decode_inputs(net_inputs[i], instances[i].name)
             task_inputs[i]['reader'] = task_inputs_from_reader
         
             scope = instances[i].task_reuse_scope + '/'
             with fluid.unique_name.guard(scope):
-          
                 output_vars = instances[i].build_task_layer(task_inputs[i], phase='train', scope=scope)
                 output_vars = {instances[i].name+'/'+key: val for key, val in output_vars.items()}
-                loss_var[i] = output_vars[instances[i].name+'/loss']
+                loss_var = output_vars[instances[i].name+'/loss']
                 task_output_vars[i] = output_vars
+
             if instances[i].is_target:
                 with fluid.program_guard(pred_prog, pred_init_prog):
                     cur_inputs = _decode_inputs(pred_net_inputs, instances[i].name)
@@ -489,29 +472,19 @@ class Controller(object):
                     scope = instances[i].task_reuse_scope + '/'
                     with fluid.unique_name.guard(scope):
                         instances[i].build_task_layer(pred_task_inputs, phase='pred', scope=scope)
+            return loss_var
 
-            bb_fetches[i] = {k: v.name for k,v in bb_output_vars[i].items()}
-            task_fetches[i] = {k: v.name for k,v in task_output_vars[i].items()}
-            fetches[i] = task_fetches[i]
-            #fetches[i] = loss_var[i]
-            return loss_var[i]
+        for i in range(num_instances):
+            def task_loss():
+                task_id = i
+                return lambda: get_loss(task_id)
+            task_fns[i] = task_loss()
 
-        # loss =layers.reduce_mean(layers.concat(loss_vars))
-         for i in range(num_instances):
-                       def task_loss():
-                                       task_id = i
-                                                       return lambda: get_loss(task_id)
-                                                                   task_fns[i] = task_loss()
-        #task_fns = {0: lambda:get_loss(0), 1: lambda:get_loss(1), 2: lambda:get_loss(2)}
-        #task_fns = {0: lambda:get_loss(0)}
-        #fluid.layers.Print(case, message='case')
         loss  = layers.switch_case(
             branch_index=case,
-            # layers.fill_constant(shape=[1], dtype='int32', value=case),
             branch_fns=task_fns
         )
         self._switched_loss = loss.name
-        #fetches[0] = loss
         main_reader = main_inst.reader['train']
 
         num_examples = main_reader.num_examples
@@ -550,7 +523,6 @@ class Controller(object):
         self.train_program = self.saver_program
 
         self.main_inst = main_inst
-        #self.fetches = task_fetch
         self.has_init_train = True
         self.has_init_pred = True
         self._net_inputs = net_inputs
@@ -605,8 +577,6 @@ class Controller(object):
         backbone = self.train_backbone
         train_program = self.train_program
         saver_program = self.saver_program
-        #fetches = self.fetches
-
         finish = []
         for inst in instances:
             if inst.is_target:
@@ -639,10 +609,6 @@ class Controller(object):
         # do training
         fetch_names = {}
         fetch_list = []
-        #for i in range(num_instances):
-        #    fetch_names[i], fetch_list[i] = zip(*fetches[0])
-        #fetch_names, fetch_list = zip(*fetches.items())
-       # fetch_list = task_fetch.name
         main_step = 0 # only count for main task
         global_step = 0 # count for all tasks
         epoch = 0
@@ -693,28 +659,13 @@ class Controller(object):
         
         while not train_finish():
             feed, mask, id = pack_multicard_feed(joint_iterator, self._net_inputs, self.dev_count)
-            print('-----------------task')
-            print(id)
-            print(instances[id].name)
-            print('---------------------')
-            # print('-------------------fetch_list[id]')
-            # print(fetch_list[id])
-            # feed.append()
-            # print(feed)
-            #rt_preg = self.exe.run(self._pred_prog, feed=feed, fetch_list=fetch_list)
+
             feed[0].update({'case':np.array([id],dtype='int32')})
             fetch_list.append(self._switched_loss)
             
             rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list)
-            #del feed[0]['__task_id']
-            #del feed[0]['case']
-            #del feed[0]['batchsize_x_seqlen']
-            rt_preg = self.exe.run(self._pred_prog, feed=next(instances[id].reader['train'].iterator()), fetch_list=fetch_list)
             rt_loss = rt_outputs.pop()
             rt_outputs = {k:v for k,v in zip(fetch_names, rt_outputs)}
-            # rt_task_id = np.squeeze(rt_outputs['__task_id']).tolist()
-            # rt_task_id = rt_task_id[0] if isinstance(rt_task_id, list) else rt_task_id
-            #rt_task_id = id
             cur_task = instances[id]
 
             # backbone_rt_outputs = {k:v for k,v in rt_outputs.items() if '/' not in k}
@@ -731,7 +682,6 @@ class Controller(object):
                 cur_task.save(suffix='.step'+str(cur_task_global_step), prog=self._pred_prog)
 
             if global_step % main_conf.get('print_every_n_steps', 5) == 0:
-                # loss = rt_outputs[cur_task.name+'/loss']
                 loss = rt_loss
                 loss = np.mean(np.squeeze(loss)).tolist()
 
@@ -816,6 +766,3 @@ if __name__ == '__main__':
 
 
 __all__ = ["Controller"]
-
-            
-

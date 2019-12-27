@@ -113,10 +113,6 @@ class TaskInstance(object):
         # prog = fluid.default_main_program().clone()
         if prog is not None:
             save_prog = prog
-            print('i am inference prog!!!!!')
-            print('i am inference prog!!!!!')
-            print('i am inference prog!!!!!')
-            print('i am inference prog!!!!!')
         else:
             save_prog = fluid.default_main_program().clone()
 
