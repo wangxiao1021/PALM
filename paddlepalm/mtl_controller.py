@@ -131,7 +131,7 @@ def _merge_conf(conf1, conf2, conf1_first=True, strict=False):
 
     for k, v in new_conf.items():
         if k in base_conf:
-            if base_conf[k] != v:
+            if k!='batch_size' and base_conf[k] != v:
                 raise Warning("value of argument {} has been updated to {}.".format(k, v))
         else:
             if strict:
@@ -226,9 +226,9 @@ class Controller(object):
             conf = _parse_yaml(instpath, support_cmd_line=False)
             # conf = _check_conf(conf, TASK_INSTANCE_REQUIRED_ARGS)
             conf = _check_conf(conf)
-            temp_conf = _merge_conf(mtl_conf, conf, strict=True)
+            temp_conf = _merge_conf(conf, mtl_conf, strict=True)
             print_dict(temp_conf, title='{} configuration'.format(instname))
-            conf = _merge_conf(mtl_conf, conf)
+            conf = _merge_conf(conf, mtl_conf)
             
             instname_to_conf[instname] = conf
             instname_to_id[instname] = id
