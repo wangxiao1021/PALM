@@ -31,6 +31,8 @@ def _check_and_adapt_shape_dtype(rt_val, attr, message=""):
     
     shape, dtype = attr
    
+    if (len(shape) != rt_val.ndim) :
+        print(rt_val)
     assert rt_val.dtype == np.dtype(dtype), message+"yielded data type not consistent with attr settings. Expect: {}, receive: {}.".format(rt_val.dtype, np.dtype(dtype))
     assert len(shape) == rt_val.ndim, message+"yielded data rank(ndim) not consistent with attr settings. Expect: {}, receive: {}.".format(len(shape), rt_val.ndim)
     for rt, exp in zip(rt_val.shape, shape):
@@ -133,6 +135,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                 idx = outname_to_pos[id][outname]
                 val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=outname+': ')
                 result[idx] = val
+
 
             if task_outname in outname_to_pos[id]:
                 idx = outname_to_pos[id][task_outname]

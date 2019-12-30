@@ -43,13 +43,14 @@ class TaskParadigm(task_paradigm):
         self._pred_output_path = config.get('pred_output_path', None)
         self._preds = []
 
+
     @property
     def inputs_attrs(self):
+        reader = {}
+        bb = {"encoder_outputs": [[-1, -1, -1], 'float32']}
         if self._is_training:
-            reader = {"label_ids": [[-1, -1], 'int64']}
-        else:
-            reader = {}
-        bb = {"sentence_embedding": [[-1, self._hidden_size], 'float32']}
+            reader["label_ids"] = [[-1, -1], 'int64']
+            reader["seq_lens"] = [[-1], 'int64']
         return {'reader': reader, 'backbone': bb}
 
     @property
@@ -61,10 +62,9 @@ class TaskParadigm(task_paradigm):
 
     def build(self, inputs, scope_name=''):
         token_emb = inputs['backbone']['encoder_outputs']
-        seq_lens = fluid.data(
-            name='seq_lens', shape=[-1], dtype='int64', lod_level=0)
         if self._is_training:
             label_ids = inputs['reader']['label_ids']
+            seq_lens = inputs['reader']['seq_lens']
             # squeeze_labels = fluid.layers.squeeze(padded_labels, axes=[-1])
         emission = fluid.layers.fc(
             size=self.num_classes,
