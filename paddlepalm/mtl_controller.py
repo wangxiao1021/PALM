@@ -557,7 +557,7 @@ class Controller(object):
             insert_taskid=False, insert_batchsize=False, insert_seqlen=False, insert_batchsize_x_seqlen=False)
 
         pred_prog = inst.load(infer_model_path)
-        pred_prog = fluid.CompiledProgram(pred_prog).with_data_parallel()
+        # pred_prog = fluid.CompiledProgram(pred_prog).with_data_parallel()
         if inst.reader['pred'] is None:
             pred_reader = inst.Reader(inst.config, phase='pred')
             inst.reader['pred'] = pred_reader
