@@ -82,7 +82,6 @@ class TaskParadigm(task_paradigm):
             end_positions = fluid.layers.elementwise_min(end_positions, max_position)
             start_positions.stop_gradient = True
             end_positions.stop_gradient = True
-            fluid.layers.Print(start_positions)
         else:
             unique_id = inputs['reader']['unique_ids']
 

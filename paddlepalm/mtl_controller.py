@@ -498,7 +498,7 @@ class Controller(object):
                 return lambda: get_loss(task_id)
             task_fns[i] = task_loss()
 
-        loss  = layers.switch_case(
+        loss = layers.switch_case(
             branch_index=case,
             branch_fns=task_fns
         )
@@ -631,10 +631,8 @@ class Controller(object):
 
             feed[0].update({'case':np.array([id],dtype='int32')})
             fetch_list.append(self._switched_loss)
-            print(fetch_list)
             rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list)
-            while mask.pop() == False:
-                rt_loss = rt_outputs.pop()
+            rt_loss = rt_outputs.pop()
 
             rt_outputs = {k:v for k,v in zip(fetch_names, rt_outputs)}
             cur_task = instances[id]
