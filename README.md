@@ -632,7 +632,9 @@ task_ids: 一个shape为[batch_size, seq_len]的全0矩阵，用于支持ERNIE�
 
 #### 文本匹配数据集reader工具：match
 
-该reader完成文本匹配数据集的载入与处理，reader接受[tsv格式](https://en.wikipedia.org/wiki/Tab-separated_values)的数据集输入，数据集应该包含三列，一列为样本标签`label`，其余两列分别为待匹配的文本`text_a`和文本`text_b`。数据集范例可参考`data/match4mrqa`中的数据集文件，格式形如
+该reader完成文本匹配数据集的载入与处理，reader接受[tsv格式](https://en.wikipedia.org/wiki/Tab-separated_values)的数据集输入，数据集应该包含三列，对于pointwise的学习策略，其中，一列为样本标签`label`，其余两列分别为待匹配的文本`text_a`和文本`text_b`；对于paiwise的学习策略，其中，一列为待匹配的样本`text_a`，其余为其对应的正例`text_b`和负例`text_b_neg`。其中学习策略为pointwise的数据集范例可参考`data/match4mrqa`中的数据集文件，格式形如
+
+**学习策略为pointwise：**
 
 ```yaml
 label   text_a  text_b                                                                           
@@ -640,6 +642,16 @@ label   text_a  text_b
 0   where is port au prince located in haiti **[TAB]** Its population is difficult to ascertain due to the rapid growth of slums in the hillsides
 0   What is the world’s first-ever pilsner type blond lager, the company also awarded the Master Homebrewer Competition held in San Francisco to an award-winning brewer who won the prestigious American Homebrewers Associations' Homebrewer of the Year award in 2013? **[TAB]** of the Year award in 2013, becoming the first woman in thirty years, and the first African American person ever to ever win the award.
 1   What has Pakistan told phone companies? **[TAB]** Islamabad, Pakistan (CNN) -- Under heavy criticism for a telling cell phone carriers to ban certain words in text messages, the Pakistan Telecommunication Authority went into damage control mode Wednesday.
+```
+
+**学习策略为pairwise：**
+
+```yaml
+text_a   text_b  text_b_neg                                                                           
+arrg ... ubuntunoob and ubuntu_user ... your nicks are confusing ^^ i d say it was **[TAB]** how that ... dynamic size of the c    ontainer another idea would be an installation on an ( external ) flash-stick/card **[TAB]** will try now thanks if you have ati     and md0 - i m no further help btw
+got an error message while installing __number__ need help ( initrmfs ) mount failure error do you see this grub no a little     more info would help ;-) did you boot a cd or pen drive to install or install from windows was this a install from windows whi    ch is called a wubi how much memory does the computer have memory=ram so you got installed no errors and get this on reboot so     when did you get this error did you burn it as a image **[TAB]** were you able to check the md5sum of the iso here is alink on     md5sum i suspect it may not be this but never hurts to check __url__ **[TAB]** you would have to capture the pcl convert with hp    2xx then print that so do i set up another printer in cups with that driver but pointed to output to my cups pdf printer or do     i need to pipe it through the driver on a lower level somehow
+okay i come from a windows background .. currently running v __number__ __number__ and having a video card ( ati ) issue ...     if i have an issue like this ( in windows ) i would go to the vendor site locate a current driver and install in ubuntu it aut    omatically downloaded a driver - this driver i assume does not come from the vendor site but rather a ubuntu repository of tes    ted/approved drivers is that a correct assumption yes that is correct **[TAB]** so given the downloaded driver is not performing     properly i went to ati and found they have a newer version driver what is the correct process to load the new version do i ne    ed to uninstall ( how ) the old version the new version is a run file - i am not familiar with what is the issue you re having     with the ubuntu-supplied driver **[TAB]** ls -ld __path__ __path__ __path__ __path__ wrxr-xr-x
+hey he wanted excitement __url__ __url__ dapper multivers thank you so much now i can do apt-get build-dep mythtv and compile     it myself np i cannot install those packages i am also needing them why ca n't you install them i just verified they re insta    llable i am on a default dapper install with all extra repositories in sources list uncommented and cant then you do n't have     the correct repo enabled **[TAB]** lame installed ( none ) apt-cache policy lame **[TAB]** i am using mercury ... i think it is be    tter than amsn i lost the curiosity for this __number__ years ago but i ve back are you using a router
 ```
 
 ***注意：数据集的第一列必须为header，即标注每一列的列名***
