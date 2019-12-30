@@ -17,15 +17,6 @@ from paddlepalm.interface import reader
 from paddlepalm.reader.utils.reader4ernie import ClassifyReader
 
 
-def match(learning_strategy='pointwise', siamese=False):
-
-    if siamese::
-        SiameseMatchReader(..., learning_strategy)
-    else:
-        ClassifyReader(..., learning_strategy)
-
-    
-
 
 
 class Reader(reader):
