@@ -713,7 +713,7 @@ class Controller(object):
         distribute_feeder = data_feeder(inst.reader['pred'].iterator, feed_batch_process_fn, prefetch_steps=1, phase='pred')
 
         buf = []
-        for feed, mask in distribute_feeder:
+        for feed, mask, id in distribute_feeder:
             print('before run')
             rt_outputs = self.exe.run(pred_prog, feed, fetch_vars)
             print('after run')
