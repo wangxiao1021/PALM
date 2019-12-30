@@ -16,6 +16,18 @@
 from paddlepalm.interface import reader
 from paddlepalm.reader.utils.reader4ernie import ClassifyReader
 
+
+def match(learning_strategy='pointwise', siamese=False):
+
+    if siamese::
+        SiameseMatchReader(..., learning_strategy)
+    else:
+        ClassifyReader(..., learning_strategy)
+
+    
+
+
+
 class Reader(reader):
     
     def __init__(self, config, phase='train', dev_count=1, print_prefix=''):
@@ -84,7 +96,6 @@ class Reader(reader):
                         "task_ids_neg": [[-1, -1], 'int64']
                         })
         return returns
-    
 
     def load_data(self):
         self._data_generator = self._reader.data_generator(self._input_file, self._batch_size, self._num_epochs, dev_count=self._dev_count, shuffle=self._shuffle, phase=self._phase)
