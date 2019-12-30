@@ -714,33 +714,33 @@ class Controller(object):
 
         buf = []
         for feed, mask, id in distribute_feeder:
-            print('before run')
+            # print('before run')
             rt_outputs = self.exe.run(pred_prog, feed, fetch_vars)
-            print('after run')
+            # print('after run')
             splited_rt_outputs = []
             for item in rt_outputs:
                 splited_rt_outputs.append(np.split(item, len(mask)))
 
             # assert len(rt_outputs) == len(mask), [len(rt_outputs), len(mask)]
-            print(mask)
+            # print(mask)
             
             while mask.pop() == False:
                 print(mask)
                 for item in splited_rt_outputs:
                     item.pop()
             rt_outputs = []
-            print('cancat')
+            # print('cancat')
             for item in splited_rt_outputs:
                 rt_outputs.append(np.concatenate(item))
                 
             rt_outputs = {k:v for k,v in zip(fetch_names, rt_outputs)}
             inst.postprocess(rt_outputs, phase='pred')
-        print('leave feeder')
+        # print('leave feeder')
         if inst.task_layer['pred'].epoch_inputs_attrs:
             reader_outputs = inst.reader['pred'].get_epoch_outputs()
         else:
             reader_outputs = None
-        print('epoch postprocess')
+        # print('epoch postprocess')
         inst.epoch_postprocess({'reader':reader_outputs}, phase='pred')
 
 
