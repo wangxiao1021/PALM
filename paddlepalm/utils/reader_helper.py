@@ -111,33 +111,37 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
         joint_shape_and_dtypes: 本质上是根据bb和parad的attr设定的，并且由reader中的attr自动填充-1（可变）维度得到，因此通过与iterator的校验可以完成runtime的batch正确性检查
     """
 
-    pos_to_outname = {j:i for i,j in outname_to_pos.items()}
-
     task_ids = range(len(iterators))
     weights = [mr / float(sum(mrs)) for mr in mrs]
     if not keep_one_task:
         dev_count = 1
 
-    results = _zero_batch(joint_shape_and_dtypes)
-    outbuf = {}
+    results = {}
+    outbufs = {}
+    pos_to_outname = {}
     for id in task_ids:
+        pos_to_outname[id] = {j:i for i,j in outname_to_pos[id].items()}
+        result = _zero_batch(joint_shape_and_dtypes[id])
+        outbuf = {}
         outputs = next(iterators[id]) # dict type
         outbuf[id] = outputs
         prefix = iterator_prefixes[id]
         for outname, val in outputs.items():
             task_outname = prefix + '/' + outname
 
-            if outname in outname_to_pos:
-                idx = outname_to_pos[outname]
-                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=outname+': ')
-                results[idx] = val
+            if outname in outname_to_pos[id]:
+                idx = outname_to_pos[id][outname]
+                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=outname+': ')
+                result[idx] = val
 
-            if task_outname in outname_to_pos:
-                idx = outname_to_pos[task_outname]
-                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=task_outname+': ')
-                results[idx] = val
+            if task_outname in outname_to_pos[id]:
+                idx = outname_to_pos[id][task_outname]
+                val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=task_outname+': ')
+                result[idx] = val
+        results[id] = result
+        outbufs[id] = outbuf
 
-    fake_batch = results
+    all_batch = results
     dev_count_bak = dev_count
 
     def iterator():
@@ -145,7 +149,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
         has_show_warn = False
         while True:
             id = np.random.choice(task_ids, p=weights)
-            results = fake_batch
+            results = all_batch[id]
             if v > 0:
                 print('----- debug joint iterator -----')
                 print('sampled task id: '+str(id))
@@ -153,8 +157,8 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
             
             for i in range(dev_count):
                 
-                results[outname_to_pos['__task_id']] = task_id_tensor
-                assert outname_to_pos['__task_id'] == 0
+                results[outname_to_pos[id]['__task_id']] = task_id_tensor
+                assert outname_to_pos[id]['__task_id'] == 0
 
                 if id in outbuf:
                     outputs = outbuf[id]
@@ -165,14 +169,14 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                 if 'token_ids' in outputs:
                     val1 = len(outputs['token_ids'])
                     val = _check_and_adapt_shape_dtype(np.array([val1], dtype='int64'), [[1], 'int64'], iterator_prefixes[id]+' tokenids: ')
-                    results[outname_to_pos['batch_size']] = val
+                    results[outname_to_pos[id]['batch_size']] = val
 
                     val2 = len(outputs['token_ids'][0])
                     val = _check_and_adapt_shape_dtype(np.array([val2], dtype='int64'), [[1], 'int64'])
-                    results[outname_to_pos['seqlen']] = val
+                    results[outname_to_pos[id]['seqlen']] = val
 
                     val = _check_and_adapt_shape_dtype(np.array([val1*val2], dtype='int64'), [[1], 'int64'])
-                    results[outname_to_pos['batchsize_x_seqlen']] = val
+                    results[outname_to_pos[id]['batchsize_x_seqlen']] = val
                 else:
                     if not has_show_warn:
                         print('WARNING: token_ids not found in current batch, failed to yield batch_size, seqlen and batchsize_x_seqlen. (This message would be shown only once.)')
@@ -184,18 +188,18 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                         print('reader generate: '+outname)
                     task_outname = prefix + '/' + outname
 
-                    if outname in outname_to_pos:
-                        idx = outname_to_pos[outname]
+                    if outname in outname_to_pos[id]:
+                        idx = outname_to_pos[id][outname]
                         if v > 0:
                             print(outname + ' is insert in idx ' + str(idx))
-                        val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=outname+': ')
+                        val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=outname+': ')
                         results[idx] = val
 
-                    if task_outname in outname_to_pos:
-                        idx = outname_to_pos[task_outname]
+                    if task_outname in outname_to_pos[id]:
+                        idx = outname_to_pos[id][task_outname]
                         if v > 0:
                             print(task_outname + ' is insert in idx ' + str(idx))
-                        val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[idx], message=task_outname+': ')
+                        val = _check_and_adapt_shape_dtype(val, joint_shape_and_dtypes[id][idx], message=task_outname+': ')
                         results[idx] = val
 
                 if v > 0:
@@ -210,7 +214,7 @@ def create_joint_iterator_fn(iterators, iterator_prefixes, joint_shape_and_dtype
                 elif return_type == 'dict':
                     temp = {}
                     for pos, i in enumerate(results):
-                        temp[pos_to_outname[pos]] = i
+                        temp[pos_to_outname[id][pos]] = i
                     yield temp
 
     return iterator
