@@ -81,8 +81,8 @@ def mask(batch_tokens, total_token_num, vocab_size, CLS=1, SEP=2, MASK=3, dev_co
                     sent[token_index] = MASK
                     mask_flag = True
                     mask_pos.append(sent_index * max_len + token_index)
-        mask_label = np.array(mask_label).astype("int64").reshape([-1, 1])
-        mask_pos = np.array(mask_pos).astype("int64").reshape([-1, 1])
+        mask_label = np.array(mask_label).astype("int64").reshape([-1])
+        mask_pos = np.array(mask_pos).astype("int64").reshape([-1])
 
         multidev_batch_tokens.extend(batch_tokens)
         multidev_mask_label.append(mask_label)

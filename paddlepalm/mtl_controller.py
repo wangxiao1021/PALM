@@ -187,13 +187,17 @@ def _fit_attr(conf, fit_attr, strict=False):
 def create_feed_batch_process_fn(net_inputs):
 
     def feed_batch_process_fn(data):
-        temp = {}
-        for q, var in net_inputs.items():
-            if isinstance(var, str) or isinstance(var, unicode):
-                temp[var] = data[q]
-            else:
-                temp[var.name] = data[q]
-        return temp
+        temps = {}
+        for i in range(len(net_inputs)):
+            temp = {}
+            for q, var in net_inputs[i].items():
+                if isinstance(var, str) or isinstance(var, unicode):
+                    temp[var] = data[q]
+                else:
+                    temp[var.name] = data[q]
+            temps[i] = temp
+            
+        return temps
 
     return feed_batch_process_fn
 
