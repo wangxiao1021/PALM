@@ -628,7 +628,7 @@ class Controller(object):
 
             feed[0].update({'case':np.array([id],dtype='int32')})
             fetch_list.append(self._switched_loss)
-            
+            print(fetch_list)
             rt_outputs = self.exe.run(train_program, feed=feed, fetch_list=fetch_list)
             while mask.pop() == False:
                 rt_loss = rt_outputs.pop()
