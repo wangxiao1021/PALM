@@ -30,8 +30,8 @@ class Reader(reader):
             max_seq_len=config['max_seq_len'],
             do_lower_case=config.get('do_lower_case', False),
             for_cn=config.get('for_cn', False),
-            random_seed=config.get('seed', None)
-            #label_map_config=config['label_map_config']
+            random_seed=config.get('seed', None),
+            label_map_config=config['label_map_config']
             )
         self._reader = reader
         self._dev_count = dev_count
