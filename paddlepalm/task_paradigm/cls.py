@@ -27,6 +27,7 @@ class TaskParadigm(task_paradigm):
         self._is_training = phase == 'train'
         self._hidden_size = backbone_config['hidden_size']
         self.num_classes = config['n_classes']
+        self._multi_cls = config.get('multi_cls', False)
     
         if 'initializer_range' in config:
             self._param_initializer = config['initializer_range']
@@ -54,7 +55,8 @@ class TaskParadigm(task_paradigm):
         if self._is_training:
             return {'loss': [[1], 'float32']}
         else:
-            return {'logits': [[-1, self.num_classes], 'float32']}
+            return {'logits': [[-1, self.num_classes], 'float32'],
+                    'probs': [[-1, self.num_classes], 'float32']}
 
     def build(self, inputs, scope_name=''):
         sent_emb = inputs['backbone']['sentence_embedding']
