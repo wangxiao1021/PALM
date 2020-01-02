@@ -68,14 +68,16 @@ class Reader(reader):
                     "segment_ids": [[-1, -1], 'int64'],
                     "input_mask": [[-1, -1, 1], 'float32'],
                     "label_ids": [[-1, -1], 'int64'],
-                    "task_ids": [[-1, -1], 'int64']
+                    "task_ids": [[-1, -1], 'int64'],
+                    'seq_lens': [[-1], 'int64']
                     }
         else:
             return {"token_ids": [[-1, -1], 'int64'],
                     "position_ids": [[-1, -1], 'int64'],
                     "segment_ids": [[-1, -1], 'int64'],
                     "task_ids": [[-1, -1], 'int64'],
-                    "input_mask": [[-1, -1, 1], 'float32']
+                    "input_mask": [[-1, -1, 1], 'float32'],
+                    'seq_lens': [[-1], 'int64']
                     }
 
 
@@ -86,7 +88,7 @@ class Reader(reader):
 
         def list_to_dict(x):
             names = ['token_ids', 'segment_ids', 'position_ids', 'task_ids', 'input_mask', 
-                'label_ids']
+                'label_ids','seq_lens']
             outputs = {n: i for n,i in zip(names, x)}
             if not self._is_training:
                 del outputs['label_ids']

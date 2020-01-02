@@ -46,10 +46,10 @@ class TaskParadigm(task_paradigm):
     @property
     def inputs_attrs(self):
         if self._is_training:
-            reader = {"label_ids": [[-1, -1], 'int64']}
+            reader = {"label_ids": [[-1, -1], 'int64'], "seq_lens": [[-1], 'int64']}
         else:
-            reader = {}
-        bb = {"sentence_embedding": [[-1, self._hidden_size], 'float32']}
+            reader = {"seq_lens": [[-1], 'int64']}
+        bb = {"encoder_outputs": [[-1, self._hidden_size], 'float32']}
         return {'reader': reader, 'backbone': bb}
 
     @property
@@ -60,11 +60,10 @@ class TaskParadigm(task_paradigm):
             return {'logits': [[-1, self.num_classes], 'float32']}
 
     def build(self, inputs, scope_name=''):
-        # token_emb = inputs['backbone']['encoder_outputs']
+        token_emb = inputs['backbone']['encoder_outputs']
         # token_emb = 
-        seq_lens = inputs['backbone']['encoder_outputs']
-        # seq_lens = fluid.data(
-        #     name='seq_lens', shape=[-1], dtype='int64', lod_level=0)
+        seq_lens = inputs['reader']['seq_lens']
+    
         if self._is_training:
             label_ids = inputs['reader']['label_ids']
             # squeeze_labels = fluid.layers.squeeze(padded_labels, axes=[-1])
@@ -78,29 +77,9 @@ class TaskParadigm(task_paradigm):
             bias_attr=fluid.ParamAttr(
                 name=scope_name+"cls_out_b", initializer=fluid.initializer.Constant(0.)),
             num_flatten_dims=2)
-        
-
-        #         # 之后的不要了
-
-        #     cls_feats = fluid.layers.dropout(
-        #         x=sent_emb,
-        #         dropout_prob=self._dropout_prob,
-        #         dropout_implementation="upscale_in_train")
-
-        # logits = fluid.layers.fc(
-        #     input=cls_feats,
-        #     size=self.num_classes,
-        #     param_attr=fluid.ParamAttr(
-        #         name=scope_name+"cls_out_w",
-        #         initializer=self._param_initializer),
-        #     bias_attr=fluid.ParamAttr(
-        #         name=scope_name+"cls_out_b", initializer=fluid.initializer.Constant(0.)))
-
+    
         if self._is_training:
-            # inputs = fluid.layers.softmax(logits)
-            # loss = fluid.layers.cross_entropy(
-            #     input=inputs, label=label_ids)
-            # loss = layers.mean(loss)
+           
             crf_cost = fluid.layers.linear_chain_crf(  # 这里的label有没有问题？
                 input=emission,
                 label=label_ids,
