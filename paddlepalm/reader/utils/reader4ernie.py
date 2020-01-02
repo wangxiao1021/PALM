@@ -603,7 +603,9 @@ class SequenceLabelReader(BaseReader):
         return return_list
 
     def _reseg_token_label(self, tokens, labels, tokenizer):
-
+        # print(tokens)
+        # print('\n----------------------------')
+        # print(labels)
         assert len(tokens) == len(labels)
         ret_tokens = []
         ret_labels = []
@@ -612,13 +614,39 @@ class SequenceLabelReader(BaseReader):
             if len(sub_token) == 0:
                 continue
             ret_tokens.extend(sub_token)
-
+            # if len(sub_token) == 1:
+                # ret_labels.append(label)
             if len(sub_token) == 1:
                 ret_labels.append(label)
                 continue
 
+
+            # ret_labels.append(label)
+            # sub_label = label
+            # if label.startswith("B-"):
+            #     sub_label = "I-" + label[2:]
+            # ret_labels.extend([sub_label] * (len(sub_token) - 1))
+            # if label == "O" or label.startswith("I-"):
             ret_labels.extend([label] * len(sub_token))
-         
+            # elif label.startswith("B-"):
+            #     i_label = "B-" + label[2:]
+            #     ret_labels.extend([label] + [i_label] * (len(sub_token) - 1))
+            # elif label.startswith("S-"):
+            #     b_laebl = "B-" + label[2:]
+            #     e_label = "E-" + label[2:]
+            #     i_label = "I-" + label[2:]
+            #     ret_labels.extend([b_laebl] + [i_label] * (len(sub_token) - 2) + [e_label])
+            # elif label.startswith("E-"):
+            #     i_label = "I-" + label[2:]
+            #     ret_labels.extend([i_label] * (len(sub_token) - 1) + [label])
+        # print('\n----------------------------')
+        # print(len(ret_tokens) == len(ret_labels))
+        # print('\n----------tokens------------')
+        # print(ret_tokens)
+        # print('\n----------labels------------')
+        # print(ret_labels)
+        # print('\n----------------------------')
+        assert len(ret_tokens) == len(ret_labels)
         return ret_tokens, ret_labels
 
     def _convert_example_to_record(self, example, max_seq_length, tokenizer):

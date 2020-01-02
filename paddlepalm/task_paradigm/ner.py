@@ -76,29 +76,9 @@ class TaskParadigm(task_paradigm):
             bias_attr=fluid.ParamAttr(
                 name=scope_name+"cls_out_b", initializer=fluid.initializer.Constant(0.)),
             num_flatten_dims=2)
-        
-
-        #         # 之后的不要了
-
-        #     cls_feats = fluid.layers.dropout(
-        #         x=sent_emb,
-        #         dropout_prob=self._dropout_prob,
-        #         dropout_implementation="upscale_in_train")
-
-        # logits = fluid.layers.fc(
-        #     input=cls_feats,
-        #     size=self.num_classes,
-        #     param_attr=fluid.ParamAttr(
-        #         name=scope_name+"cls_out_w",
-        #         initializer=self._param_initializer),
-        #     bias_attr=fluid.ParamAttr(
-        #         name=scope_name+"cls_out_b", initializer=fluid.initializer.Constant(0.)))
 
         if self._is_training:
-            # inputs = fluid.layers.softmax(logits)
-            # loss = fluid.layers.cross_entropy(
-            #     input=inputs, label=label_ids)
-            # loss = layers.mean(loss)
+          
             crf_cost = fluid.layers.linear_chain_crf(  # 这里的label有没有问题？
                 input=emission,
                 label=label_ids,
@@ -132,9 +112,6 @@ class TaskParadigm(task_paradigm):
             logits = rt_outputs['logits']
             preds = np.argmax(logits, -1)
             self._preds.extend(preds.tolist())
-    
-    def get_labels(self):
-        return ['[Padding]', '[##WordPiece]', '[CLS]', '[SEP]', "B-MISC", "I-MISC", "O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
 
     def epoch_postprocess(self, post_inputs):
         # there is no post_inputs needed and not declared in epoch_inputs_attrs, hence no elements exist in post_inputs
