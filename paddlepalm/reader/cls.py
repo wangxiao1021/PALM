@@ -25,18 +25,21 @@ class Reader(reader):
             """
 
         self._is_training = phase == 'train'
+        self._multi_cls = config.get('multi_cls', False)
 
         reader = ClassifyReader(config['vocab_path'],
             max_seq_len=config['max_seq_len'],
             do_lower_case=config.get('do_lower_case', False),
             for_cn=config.get('for_cn', False),
-            random_seed=config.get('seed', None))
+            random_seed=config.get('seed', None),
+            is_multi_cls=self._multi_cls)
         self._reader = reader
         self._dev_count = dev_count
 
         self._batch_size = config['batch_size']
         self._max_seq_len = config['max_seq_len']
         self._num_classes = config['n_classes']
+        
 
         if phase == 'train':
             self._input_file = config['train_file']
@@ -55,28 +58,23 @@ class Reader(reader):
             self._batch_size = config.get('pred_batch_size', self._batch_size)
 
         self._phase = phase
-        # self._batch_size = 
         self._print_first_n = config.get('print_first_n', 0)
 
 
     @property
     def outputs_attr(self):
+        rets = {"token_ids": [[-1, -1], 'int64'],
+                "position_ids": [[-1, -1], 'int64'],
+                "segment_ids": [[-1, -1], 'int64'],
+                "task_ids": [[-1, -1], 'int64'],
+                "input_mask": [[-1, -1, 1], 'float32']
+                }
         if self._is_training:
-            return {"token_ids": [[-1, -1], 'int64'],
-                    "position_ids": [[-1, -1], 'int64'],
-                    "segment_ids": [[-1, -1], 'int64'],
-                    "input_mask": [[-1, -1, 1], 'float32'],
-                    "label_ids": [[-1], 'int64'],
-                    "task_ids": [[-1, -1], 'int64']
-                    }
-        else:
-            return {"token_ids": [[-1, -1], 'int64'],
-                    "position_ids": [[-1, -1], 'int64'],
-                    "segment_ids": [[-1, -1], 'int64'],
-                    "task_ids": [[-1, -1], 'int64'],
-                    "input_mask": [[-1, -1, 1], 'float32']
-                    }
-
+            if self._multi_cls:
+                rets.update({"label_ids": [[-1, -1], 'int64']})
+            else:
+                rets.update({"label_ids": [[-1], 'int64']})
+        return rets
 
     def load_data(self):
         self._data_generator = self._reader.data_generator(self._input_file, self._batch_size, self._num_epochs, dev_count=self._dev_count, shuffle=self._shuffle, phase=self._phase)
@@ -101,4 +99,3 @@ class Reader(reader):
     @property
     def num_examples(self):
         return self._reader.get_num_examples(phase=self._phase)
-

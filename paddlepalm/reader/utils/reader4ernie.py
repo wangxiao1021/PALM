@@ -65,6 +65,7 @@ class BaseReader(object):
                  tokenizer="FullTokenizer",
                  phase='train',
                  is_classify=True,
+                 is_multi_cls=False,
                  is_regression=False,
                  for_cn=True,
                  task_id=0):
@@ -87,6 +88,7 @@ class BaseReader(object):
 
         self.is_classify = is_classify
         self.is_regression = is_regression
+        self.is_multi_cls = is_multi_cls
         self.current_example = 0
         self.current_epoch = 0
         self.num_examples = 0
