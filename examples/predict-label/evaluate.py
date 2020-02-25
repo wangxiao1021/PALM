@@ -38,7 +38,7 @@ def res_evaluate(res_dir="./outputs/predict/predictions.json", eval_phase='test'
             line = line.split("\t")
             label = line[2][:-1]
             label = str(label)
-            if(label=='2' and label == '3')
+            if label=='2' or label == '3':
                 label = '1'
             if label=='label':
                 continue

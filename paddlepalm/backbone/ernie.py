@@ -274,7 +274,7 @@ class ERNIE(Backbone):
             ret['word_embedding_tb'] = output_buffer['tb']['word_embedding']
             ret['encoder_outputs_tb'] = output_buffer['tb']['encoder_outputs']
             ret['sentence_embedding_tb'] = output_buffer['tb']['sentence_embedding']
-            ret['sentence_pair_embedding_tb'] = output_buffer['tb']['sentence_pair_embedding']}
+            ret['sentence_pair_embedding_tb'] = output_buffer['tb']['sentence_pair_embedding']
         
         return ret
 
