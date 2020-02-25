@@ -36,10 +36,13 @@ def res_evaluate(res_dir="./outputs/predict/predictions.json", eval_phase='test'
         first_flag = True
         for line in file:
             line = line.split("\t")
-            label = line[0]
+            label = line[2][:-1]
+            label = str(label)
+            if(label=='2' || label == '3')
+                label = '1'
             if label=='label':
                 continue
-            labels.append(str(label))
+            labels.append(label)
     file.close()
 
     preds = []
@@ -49,7 +52,7 @@ def res_evaluate(res_dir="./outputs/predict/predictions.json", eval_phase='test'
             pred = line['label']
             preds.append(str(pred))
     file.close()
-    assert len(labels) == len(preds), "prediction result doesn't match to labels"
+    assert len(labels) == len(preds), "prediction result({}) doesn't match to labels({})".format(len(preds),len(labels))
     print('data num: {}'.format(len(labels)))
     p, r, f1 = pre_recall_f1(preds, labels)
     print("accuracy: {:.4f}, precision: {:.4f}, recall: {:.4f}, f1: {:.4f}".format(accuracy(preds, labels), p, r, f1))
