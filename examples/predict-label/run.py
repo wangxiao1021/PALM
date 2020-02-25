@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     # step 1-1: create readers for prediction
     print('prepare to predict...')
-    predict_cos_reader = palm.reader.ClassifyReader(vocab_path, max_seqlen, seed=random_seed, phase='predict')
+    predict_cos_reader = palm.reader.COSReader(vocab_path, max_seqlen, seed=random_seed, phase='predict')
     # step 1-2: load the training data
     predict_cos_reader.load_data(predict_file, batch_size)
     
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     predict_cos_reader.register_with(pred_ernie)
     
     # step 4: create the task output head
-    cos_pred_head = palm.head.Classify(num_classes, input_dim, phase='predict')
+    cos_pred_head = palm.head.COS(num_classes, input_dim, phase='predict')
     
     # step 5-1: create a task trainer
     trainer = palm.Trainer(task_name)
