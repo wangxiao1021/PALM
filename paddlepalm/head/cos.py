@@ -57,6 +57,18 @@ class COS(Head):
     def build(self, inputs, scope_name=''):
         sent_emb = inputs['backbone']['word_embedding']
         sent_emb_tb = inputs['backbone']['word_embedding_tb']
+        sent_emb = fluid.layers.pool2d(
+            input=sent_emb,
+            pool_type="max",
+            pool_size=3,
+            pool_padding=1,
+            pool_stride=3)
+        sent_emb_tb = fluid.layers.pool2d(
+            input=sent_emb_tb,
+            pool_type="max",
+            pool_size=3,
+            pool_padding=1,
+            pool_stride=3)
         # if self._is_training:
         #     label_ids = inputs['reader']['label_ids']
         #     cls_feats = fluid.layers.dropout(
