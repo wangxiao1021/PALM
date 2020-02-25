@@ -42,8 +42,8 @@ class COS(Head):
     @property
     def inputs_attrs(self):
         reader = {}
-        bb = {"sentence_embedding": [[-1, self._hidden_size], 'float32'],
-        "sentence_embedding_tb": [[-1, self._hidden_size], 'float32']}
+        bb = {"word_embedding": [[-1, self._hidden_size], 'float32'],
+        "word_embedding_tb": [[-1, self._hidden_size], 'float32']}
         return {'reader': reader, 'backbone': bb}
 
     @property
@@ -55,8 +55,8 @@ class COS(Head):
             
 
     def build(self, inputs, scope_name=''):
-        sent_emb = inputs['backbone']['sentence_embedding']
-        sent_emb_tb = inputs['backbone']['sentence_embedding_tb']
+        sent_emb = inputs['backbone']['word_embedding']
+        sent_emb_tb = inputs['backbone']['word_embedding_tb']
         # if self._is_training:
         #     label_ids = inputs['reader']['label_ids']
         #     cls_feats = fluid.layers.dropout(
