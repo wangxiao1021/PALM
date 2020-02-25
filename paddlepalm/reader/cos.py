@@ -14,39 +14,31 @@
 # limitations under the License.
 
 from paddlepalm.reader.base_reader import Reader
-from paddlepalm.reader.utils.reader4ernie import ClassifyReader as CLSReader
+from paddlepalm.reader.utils.reader4ernie import COSReader as CosReader
 
 
-class MatchReader(Reader):
+class COSReader(Reader):
     """
-    The reader completes the loading and processing of matching-like task (e.g, query-query, question-answer, text similarity, natural language inference) dataset. Supported file format: tsv. 
+    The reader completes the loading and processing of text classification dataset. Supported file format: tsv. 
     
-    For pointwise learning strategy, there should be two fields in training dataset file, i.e., `text_a`, `text_b` and `label`. For pairwise learning, there should exist three fields, i.e., `text_a`, `text_b` and `text_b_neg`. For predicting, only `text_a` and `text_b` are required.
-    
-    A pointwise learning case shows as follows:
-    ```
-    label [TAB] text_a [TAB] text_b
-    1 [TAB] Today is a good day. [TAB] what a nice day!
-    0 [TAB] Such a terriable day! [TAB] There is a dog.
-    1 [TAB] I feel lucky to meet you, dear. [TAB] You are my lucky, darling.
-    1 [TAB] He likes sunshine and I like him :). [TAB] I like him. He like sunshine.
-    0 [TAB] JUST! GO! OUT! [TAB] Come in please.
-    ```
-    A pairwise learning case shows as follows:
-    text_a [TAB] text_b [TAB] text_b_neg
-    Today is a good day. [TAB] what a nice day! [TAB] terriable day!
-    Such a terriable day! [TAB] So terriable today! [TAB] There is a dog.
-    I feel lucky to meet you, dear. [TAB] You are my lucky, darling. [TAB] Buy some bananas, okey?
-    He likes sunshine and I like him :). [TAB] I like him. He like sunshine. [TAB] He has a dog.
-    JUST! GO! OUT! [TAB] go out now! [TAB] Come in please.
+    For tsv format, training dataset file should have two header areas, i.e., `label` and `text`, and test set only requires `text` area. For example,
 
-    CAUTIOUS: the HEADER is required for each dataset file! And fields (columns) should be splited by Tab (\\t).
+    ```
+    label [TAB] text
+    1 [TAB] Today is a good day.
+    0 [TAB] Such a terriable day!
+    1 [TAB] I feel lucky to meet you, dear.
+    1 [TAB] He likes sunshine and I like him :).
+    0 [TAB] JUST! GO! OUT!
+    ```
+
+    CAUTIOUS: The first line of the file must be header! And areas are splited by tab (\\t).
 
     """
     
-    def __init__(self, vocab_path, max_len, tokenizer='wordpiece', lang='en', seed=None, \
-        do_lower_case=False, learning_strategy='pointwise', phase='train', dev_count=1, print_prefix=''): 
-        """Create a new Reader for classification task data.
+    def __init__(self, vocab_path, max_len, tokenizer='wordpiece', \
+             lang='en', seed=None, do_lower_case=False, phase='train'):
+        """Create a new Reader for loading and processing classification task data.
 
         Args:
           vocab_path: the vocab file path to do tokenization and token_ids generation.
@@ -55,11 +47,10 @@ class MatchReader(Reader):
           lang: the language of dataset. Supported language: en (English), cn (Chinese). Default is en (English). 
           seed: int type. The random seed to shuffle dataset. Default is None, means no use of random seed.
           do_lower_case: bool type. Whether to do lowercase on English text. Default is False. This argument only works on English text.
-          learning_strategy: string type. This only works for training phase. Available strategies: pointwise, pairwise.
           phase: the running phase of this reader. Supported phase: train, predict. Default is train.
 
         Return:
-            a Reader object for matching-like task.
+            a Reader object for classification task.
         """
 
         Reader.__init__(self, phase)
@@ -70,52 +61,48 @@ class MatchReader(Reader):
         for_cn = lang.lower() == 'cn' or lang.lower() == 'chinese'
 
         self._register.add('token_ids')
-        if phase == 'train':
-            if learning_strategy == 'pointwise':
-                self._register.add('label_ids')
-            if learning_strategy == 'pairwise':
-                self._register.add('token_ids_neg')
-                self._register.add('position_ids_neg')
-                self._register.add('segment_ids_neg')
-                self._register.add('input_mask_neg')
-                self._register.add('task_ids_neg')
+        self._register.add('token_ids_tb')
+        self._register.add('position_ids_tb')
+        self._register.add('segment_ids_tb')
+        self._register.add('input_mask_tb')
+        self._register.add('task_ids_tb')
+
 
         self._is_training = phase == 'train'
-        self._learning_strategy = learning_strategy
 
-
-        match_reader = CLSReader(vocab_path,
+        cos_reader = CosReader(vocab_path,
                                 max_seq_len=max_len,
                                 do_lower_case=do_lower_case,
                                 for_cn=for_cn,
-                                random_seed=seed,
-                                learning_strategy = learning_strategy)
-            
-        self._reader = match_reader
-        self._dev_count = dev_count
+                                random_seed=seed)
+        self._reader = cos_reader
+
         self._phase = phase
+        # self._batch_size = 
+        # self._print_first_n = config.get('print_first_n', 0)
 
 
     @property
     def outputs_attr(self):
+        """The contained output items (input features) of this reader."""
         attrs = {"token_ids": [[-1, -1], 'int64'],
                 "position_ids": [[-1, -1], 'int64'],
                 "segment_ids": [[-1, -1], 'int64'],
                 "input_mask": [[-1, -1, 1], 'float32'],
+                # "label_ids": [[-1], 'int64'],
                 "task_ids": [[-1, -1], 'int64'],
-                "label_ids": [[-1], 'int64'],
-                "token_ids_neg": [[-1, -1], 'int64'],
-                "position_ids_neg": [[-1, -1], 'int64'],
-                "segment_ids_neg": [[-1, -1], 'int64'],
-                "input_mask_neg": [[-1, -1, 1], 'float32'],
-                "task_ids_neg": [[-1, -1], 'int64']
+                "token_ids_tb": [[-1, -1], 'int64'],
+                "position_ids_tb": [[-1, -1], 'int64'],
+                "segment_ids_tb": [[-1, -1], 'int64'],
+                "input_mask_tb": [[-1, -1, 1], 'float32'],
+                "task_ids_tb": [[-1, -1], 'int64']
                 }
         return self._get_registed_attrs(attrs)
 
 
     def load_data(self, input_file, batch_size, num_epochs=None, \
                   file_format='tsv', shuffle_train=True):
-        """Load matching data into reader. 
+        """Load classification data into reader. 
 
         Args:
             input_file: the dataset file path. File format should keep consistent with `file_format` argument.
@@ -134,14 +121,9 @@ class MatchReader(Reader):
 
     def _iterator(self): 
 
+        names = ['token_ids', 'segment_ids', 'position_ids', 'task_ids', 'input_mask',  \
+            'token_ids_tb', 'segment_ids_tb', 'position_ids_tb', 'task_ids_tb', 'input_mask_tb']
         
-        names = ['token_ids', 'segment_ids', 'position_ids', 'task_ids', 'input_mask', 'label_ids', \
-            'token_ids_neg', 'segment_ids_neg', 'position_ids_neg', 'task_ids_neg', 'input_mask_neg']
-        
-        if self._learning_strategy == 'pairwise':
-            names.remove('label_ids')
-
-
         for batch in self._data_generator():
             outputs = {n: i for n,i in zip(names, batch)}
             ret = {}
@@ -150,6 +132,10 @@ class MatchReader(Reader):
                 ret[attr] = outputs[attr]
             yield ret
 
+    # def get_epoch_outputs(self):
+    #     return {'examples': self._reader.get_examples(self._phase),
+    #             'features': self._reader.get_features(self._phase)}
+
     @property
     def num_examples(self):
         return self._reader.get_num_examples(phase=self._phase)
@@ -157,4 +143,5 @@ class MatchReader(Reader):
     @property
     def num_epochs(self):
         return self._num_epochs
+
 

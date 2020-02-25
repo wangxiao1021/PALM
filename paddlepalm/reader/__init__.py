@@ -4,3 +4,4 @@ from .match import MatchReader
 from .seq_label import SequenceLabelReader
 from .mrc import MRCReader
 from .mlm import MaskLMReader
+from .cos import COSReader

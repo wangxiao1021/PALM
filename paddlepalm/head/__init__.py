@@ -4,3 +4,4 @@ from .match import Match
 from .ner import SequenceLabel
 from .mrc import MRC
 from .mlm import MaskLM
+from .cos import COS

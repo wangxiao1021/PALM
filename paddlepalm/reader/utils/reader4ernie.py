@@ -286,6 +286,7 @@ class Reader(object):
             record = self._convert_example_to_record(example, self.max_seq_len,
                                                      self.tokenizer)                                       
             max_len = max(max_len, len(record.token_ids))
+
             if self.in_tokens:
                 to_append = (len(batch_records) + 1) * max_len <= batch_size
             else:
@@ -352,6 +353,241 @@ class Reader(object):
                 yield i
         return f
         # return wrapper
+
+class COSReader(Reader):
+    def _read_tsv(self, input_file, quotechar=None):
+        """Reads a tab separated value file."""
+        with open(input_file, 'r', encoding='utf8') as f:
+            reader = csv_reader(f)
+            headers = next(reader)
+            text_indices = [
+                index for index, h in enumerate(headers) if h != "label"
+            ]
+            Example = namedtuple('Example', headers)
+            examples = []
+            for line in reader:
+                for index, text in enumerate(line):
+                    if index in text_indices:
+                        if self.for_cn:
+                            line[index] = text.replace(' ', '')
+                        else:
+                            line[index] = text
+                example = Example(*line)
+                examples.append(example)
+            return examples
+
+    def _pad_batch_records(self, batch_records):
+        batch_token_ids = [record.token_ids for record in batch_records]
+        batch_text_type_ids = [record.text_type_ids for record in batch_records]
+        batch_position_ids = [record.position_ids for record in batch_records]
+        batch_token_ids_tb = [record.token_ids_tb for record in batch_records]
+        batch_text_type_ids_tb = [record.text_type_ids_tb for record in batch_records]
+        batch_position_ids_tb = [record.position_ids_tb for record in batch_records]
+
+        if not self.is_inference:
+            # if not self.learning_strategy == 'pairwise':
+            #     batch_labels = [record.label_id for record in batch_records]
+            #     if self.is_classify:
+            #         batch_labels = np.array(batch_labels).astype("int64").reshape(
+            #             [-1])
+            #     elif self.is_regression:
+            #         batch_labels = np.array(batch_labels).astype("float32").reshape(
+            #             [-1])
+
+            if batch_records[0].qid:
+                batch_qids = [record.qid for record in batch_records]
+                batch_qids = np.array(batch_qids).astype("int64").reshape(
+                    [-1])
+            else:
+                batch_qids = np.array([]).astype("int64").reshape([-1])
+
+        # padding
+        padded_token_ids, input_mask = pad_batch_data(
+            batch_token_ids, pad_idx=self.pad_id, return_input_mask=True)
+        padded_text_type_ids = pad_batch_data(
+            batch_text_type_ids, pad_idx=self.pad_id)
+        padded_position_ids = pad_batch_data(
+            batch_position_ids, pad_idx=self.pad_id)
+        padded_task_ids = np.ones_like(
+            padded_token_ids, dtype="int64") * self.task_id
+
+        return_list = [
+            padded_token_ids, padded_text_type_ids, padded_position_ids,
+            padded_task_ids, input_mask
+        ]
+
+        # if self.phase=='train':
+        #     if self.learning_strategy == 'pairwise':
+        padded_token_ids_tb, input_mask_tb = pad_batch_data(
+                    batch_token_ids_tb, pad_idx=self.pad_id, return_input_mask=True)
+        padded_text_type_ids_tb = pad_batch_data(
+            batch_text_type_ids_tb, pad_idx=self.pad_id)
+        padded_position_ids_tb = pad_batch_data(
+            batch_position_ids_tb, pad_idx=self.pad_id)
+        padded_task_ids_tb = np.ones_like(
+            padded_token_ids_tb, dtype="int64") * self.task_id
+
+        return_list += [padded_token_ids_tb, padded_text_type_ids_tb, \
+                        padded_position_ids_tb, padded_task_ids_tb, input_mask_tb]
+
+            # elif self.learning_strategy == 'pointwise':
+            #     return_list += [batch_labels]
+
+        return return_list
+
+    def _convert_example_to_record(self, example, max_seq_length, tokenizer):
+        """Converts a single `Example` into a single `Record`."""
+
+        text_a = tokenization.convert_to_unicode(example.text_a)
+        tokens_a = tokenizer.tokenize(text_a)
+        
+        text_b = tokenization.convert_to_unicode(example.text_b)
+        tokens_b = tokenizer.tokenize(text_b)
+        #     # Modifies `tokens_a` and `tokens_b` in place so that the total
+        #     # length is less than the specified length.
+        #     # Account for [CLS], [SEP], [SEP] with "- 3"
+        #     self._truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
+           
+        #     if has_text_b_neg and self.phase == 'train':
+        #         tokens_a_neg = tokenizer.tokenize(text_a)
+        #         text_b_neg = tokenization.convert_to_unicode(example.text_b_neg)
+        #         tokens_b_neg = tokenizer.tokenize(text_b_neg)
+        #         self._truncate_seq_pair(tokens_a_neg, tokens_b_neg, max_seq_length - 3)
+        # else:
+            # Account for [CLS] and [SEP] with "- 2"
+        if len(tokens_a) > max_seq_length - 2:
+            tokens_a = tokens_a[0:(max_seq_length - 2)]
+        if len(tokens_b) > max_seq_length - 2:
+            tokens_b = tokens_b[0:(max_seq_length - 2)]
+
+        # The convention in BERT/ERNIE is:
+        # (a) For sequence pairs:
+        #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
+        #  type_ids: 0     0  0    0    0     0       0 0     1  1  1  1   1 1
+        # (b) For single sequences:
+        #  tokens:   [CLS] the dog is hairy . [SEP]
+        #  type_ids: 0     0   0   0  0     0 0
+        #
+        # Where "type_ids" are used to indicate whether this is the first
+        # sequence or the second sequence. The embedding vectors for `type=0` and
+        # `type=1` were learned during pre-training and are added to the wordpiece
+        # embedding vector (and position vector). This is not *strictly* necessary
+        # since the [SEP] token unambiguously separates the sequences, but it makes
+        # it easier for the model to learn the concept of sequences.
+        #
+        # For classification tasks, the first vector (corresponding to [CLS]) is
+        # used as as the "sentence vector". Note that this only makes sense because
+        # the entire model is fine-tuned.
+        tokens = []
+        text_type_ids = []
+        tokens.append("[CLS]")
+        
+        text_type_ids.append(0)
+        for token in tokens_a:
+            tokens.append(token)
+            text_type_ids.append(0)
+        tokens.append("[SEP]")
+        text_type_ids.append(0)
+
+        token_ids = tokenizer.convert_tokens_to_ids(tokens)
+        position_ids = list(range(len(token_ids)))
+
+        tokens_tb = []
+        text_type_ids_tb = []
+        tokens_tb.append("[CLS]")
+        
+        text_type_ids_tb.append(0)
+        for token in tokens_b:
+            tokens_tb.append(token)
+            text_type_ids_tb.append(0)
+        tokens_tb.append("[SEP]")
+        text_type_ids_tb.append(0)
+
+        token_ids_tb = tokenizer.convert_tokens_to_ids(tokens_tb)
+        position_ids_tb = list(range(len(token_ids_tb)))
+        
+
+
+        if self.is_inference:
+            Record = namedtuple('Record',
+                                ['token_ids', 'text_type_ids', 'position_ids', 'token_ids_tb', 'text_type_ids_tb', 'position_ids_tb'])
+
+            record = Record(
+                token_ids=token_ids,
+                text_type_ids=text_type_ids,
+                position_ids=position_ids,
+                token_ids_tb=token_ids_tb,
+                text_type_ids_tb=text_type_ids_tb,
+                position_ids_tb=position_ids_tb
+                )
+        else:
+            qid = None
+            if "qid" in example._fields:
+                qid = example.qid
+            # if self.learning_strategy == 'pairwise' and self.phase == 'train':
+            #     Record = namedtuple('Record',
+            #                         ['token_ids', 'text_type_ids', 'position_ids', 'token_ids_neg', 'text_type_ids_neg', 'position_ids_neg', 'qid'])
+                
+            #     record = Record(
+            #         token_ids=token_ids,
+            #         text_type_ids=text_type_ids,
+            #         position_ids=position_ids,
+            #         token_ids_neg=token_ids_neg,
+            #         text_type_ids_neg=text_type_ids_neg,
+            #         position_ids_neg=position_ids_neg,
+            #         qid=qid)
+ 
+            # else:
+            #     if self.label_map:
+            #         label_id = self.label_map[example.label]
+            #     else:
+            #         label_id = example.label
+
+            Record = namedtuple('Record', [
+                'token_ids', 'text_type_ids', 'position_ids', 'token_ids_tb', 'text_type_ids_tb', 'position_ids_tb', 'qid'
+            ])
+
+            record = Record(
+                token_ids=token_ids,
+                text_type_ids=text_type_ids,
+                position_ids=position_ids,
+                # label_id=label_id,
+                token_ids_tb=token_ids_tb,
+                text_type_ids_tb=text_type_ids_tb,
+                position_ids_tb=position_ids_tb,
+                qid=qid)
+        return record
+    
+    def _prepare_batch_data(self, examples, batch_size, phase='train'):
+        """generate batch records"""
+        batch_records, max_len = [], 0
+        if len(examples) < batch_size:
+            raise Exception('CLS dataset contains too few samples. Expect more than '+str(batch_size))
+        for index, example in enumerate(examples):
+            if phase == "train":
+                self.current_example = index
+            record = self._convert_example_to_record(example, self.max_seq_len,
+                                                     self.tokenizer)                                       
+            max_len = max(max_len, len(record.token_ids))
+            if self.in_tokens:
+                to_append = (len(batch_records) + 1) * max_len <= batch_size
+            else:
+                to_append = len(batch_records) < batch_size
+            if to_append:
+                batch_records.append(record)
+            else:
+                batch_pad_records = self._pad_batch_records(batch_records)
+                ds = ['s'] * len(batch_pad_records)
+                for piece in palm.distribute.yield_pieces(batch_pad_records, ds, batch_size):
+                    yield piece
+                batch_records, max_len = [record], len(record.token_ids)
+      
+        if phase == 'predict' and batch_records:
+            for piece in palm.distribute.yield_pieces(\
+                        self._pad_batch_records(batch_records),
+                        ds, batch_size):
+                yield piece
+
 
 
 class MaskLMReader(Reader):

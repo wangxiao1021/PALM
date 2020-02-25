@@ -54,6 +54,7 @@ class ERNIE(Backbone):
         self._task_emb_name = "task_embedding"
         self._emb_dtype = "float32"
         self._is_pairwise = is_pairwise
+        self._is_cos = True
         self._phase=phase
         self._param_initializer = fluid.initializer.TruncatedNormal(
             scale=initializer_range)
@@ -112,6 +113,13 @@ class ERNIE(Backbone):
                         "input_mask_neg": [[-1, -1, 1], 'float32'],
                         "task_ids_neg": [[-1,-1], 'int64']
                         })
+        if self._is_cos:
+            ret.update({"token_ids_tb": [[-1, -1], 'int64'],
+                        "position_ids_tb": [[-1, -1], 'int64'],
+                        "segment_ids_tb": [[-1, -1], 'int64'],
+                        "input_mask_tb": [[-1, -1, 1], 'float32'],
+                        "task_ids_tb": [[-1,-1], 'int64']
+                        })
         return ret
                 
 
@@ -127,6 +135,11 @@ class ERNIE(Backbone):
                         "encoder_outputs_neg": [[-1, -1, self._emb_size], 'float32'],
                         "sentence_embedding_neg": [[-1, self._emb_size], 'float32'],
                         "sentence_pair_embedding_neg": [[-1, self._emb_size], 'float32']})
+        if self._is_cos:
+            ret.update({"word_embedding_tb": [[-1, -1, self._emb_size], 'float32'],
+                        "encoder_outputs_tb": [[-1, -1, self._emb_size], 'float32'],
+                        "sentence_embedding_tb": [[-1, self._emb_size], 'float32'],
+                        "sentence_pair_embedding_tb": [[-1, self._emb_size], 'float32']}) 
         return ret 
 
     def build(self, inputs, scope_name=""):
@@ -149,6 +162,14 @@ class ERNIE(Backbone):
             task_ids = inputs['task_ids_neg']
             input_buffer['neg'] = [src_ids, pos_ids, sent_ids, input_mask, task_ids]
             output_buffer['neg'] = {}
+        if self._is_cos:
+            src_ids = inputs['token_ids_tb']
+            pos_ids = inputs['position_ids_tb']
+            sent_ids = inputs['segment_ids_tb']
+            input_mask = inputs['input_mask_tb']
+            task_ids = inputs['task_ids_tb']
+            input_buffer['tb'] = [src_ids, pos_ids, sent_ids, input_mask, task_ids]
+            output_buffer['tb'] = {}
 
         for key, (src_ids, pos_ids, sent_ids, input_mask, task_ids) in input_buffer.items():
             # padding id in vocabulary must be set to 0
@@ -248,6 +269,12 @@ class ERNIE(Backbone):
             ret['encoder_outputs_neg'] = output_buffer['neg']['encoder_outputs']
             ret['sentence_embedding_neg'] = output_buffer['neg']['sentence_embedding']
             ret['sentence_pair_embedding_neg'] = output_buffer['neg']['sentence_pair_embedding']
+        
+        if self._is_cos:
+            ret['word_embedding_tb'] = output_buffer['tb']['word_embedding']
+            ret['encoder_outputs_tb'] = output_buffer['tb']['encoder_outputs']
+            ret['sentence_embedding_tb'] = output_buffer['tb']['sentence_embedding']
+            ret['sentence_pair_embedding_tb'] = output_buffer['tb']['sentence_pair_embedding']}
         
         return ret
 
