@@ -42,8 +42,8 @@ class COS(Head):
     @property
     def inputs_attrs(self):
         reader = {}
-        bb = {"word_embedding": [[-1, self._hidden_size], 'float32'],
-        "word_embedding_tb": [[-1, self._hidden_size], 'float32']}
+        bb = {"encoder_outputs": [[-1, -1, self._hidden_size], 'float32'],
+        "encoder_outputs_tb": [[-1, -1, self._hidden_size], 'float32']}
         return {'reader': reader, 'backbone': bb}
 
     @property
@@ -55,20 +55,25 @@ class COS(Head):
             
 
     def build(self, inputs, scope_name=''):
-        sent_emb = inputs['backbone']['word_embedding']
-        sent_emb_tb = inputs['backbone']['word_embedding_tb']
+        sent_emb = inputs['backbone']['encoder_outputs']
+        sent_emb_tb = inputs['backbone']['encoder_outputs_tb']
+        sent_emb = fluid.layers.reshape(sent_emb, [256, 1, -1, 768])
+
+        sent_emb_tb = fluid.layers.reshape(sent_emb_tb, [256, 1, -1, 768])
+        # print(sent_emb.shape)
+        # exit()
         sent_emb = fluid.layers.pool2d(
             input=sent_emb,
-            pool_type="max",
+            pool_type="avg",
             pool_size=3,
-            pool_padding=1,
-            pool_stride=3)
+            pool_padding="SAME",
+            pool_stride=2)
         sent_emb_tb = fluid.layers.pool2d(
             input=sent_emb_tb,
-            pool_type="max",
+            pool_type="avg",
             pool_size=3,
-            pool_padding=1,
-            pool_stride=3)
+            pool_padding="SAME",
+            pool_stride=2)
         # if self._is_training:
         #     label_ids = inputs['reader']['label_ids']
         #     cls_feats = fluid.layers.dropout(
@@ -108,7 +113,7 @@ class COS(Head):
                 raise ValueError('argument output_dir not found in config. Please add it into config dict/file.')
             with open(os.path.join(output_dir, 'predictions.json'), 'w') as writer:
                 for i in range(len(self._cos_sim)):
-                    label = 0 if self._cos_sim[i][0] < 0 else 1
+                    label = 0 if self._cos_sim[i][0] < 0.5 else 1
                     result = {'index': i, 'label': label, 'cos_sim': self._cos_sim[i]}
                     result = json.dumps(result)
                     writer.write(result+'\n')
