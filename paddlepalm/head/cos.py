@@ -57,9 +57,9 @@ class COS(Head):
     def build(self, inputs, scope_name=''):
         sent_emb = inputs['backbone']['encoder_outputs']
         sent_emb_tb = inputs['backbone']['encoder_outputs_tb']
-        sent_emb = fluid.layers.reshape(sent_emb, [256, 1, -1, 768])
+        sent_emb = fluid.layers.reshape(sent_emb, [128, 1, -1, 768])
 
-        sent_emb_tb = fluid.layers.reshape(sent_emb_tb, [256, 1, -1, 768])
+        sent_emb_tb = fluid.layers.reshape(sent_emb_tb, [128, 1, -1, 768])
         # print(sent_emb.shape)
         # exit()
         sent_emb = fluid.layers.pool2d(
