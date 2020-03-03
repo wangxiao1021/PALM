@@ -48,32 +48,38 @@ def pre_recall_f1(preds, labels):
     tp = np.sum((labels == '1') & (preds == '1'))
     fp = np.sum((labels == '0') & (preds == '1'))
     fn = np.sum((labels == '1') & (preds == '0'))
-    r = tp * 1.0 / (tp + fn)
-    # Precision=TP/(TP+FP)
-    p = tp * 1.0 / (tp + fp)
     epsilon = 1e-31
+    r = tp * 1.0 / (tp + fn +epsilon)
+    # Precision=TP/(TP+FP)
+    p = tp * 1.0 / (tp + fp+epsilon)
+    
     f1 = 2 * p * r / (p+r+epsilon)
     return p, r, f1
 
 
-def do_eval(step):
+def do_eval(step, data_dir=''):
     # if eval_phase == 'test':
     #     data_dir="./data/test.tsv"
     # elif eval_phase == 'dev':
     #     data_dir="./data/dev.tsv"
     # else:
     #     assert eval_phase in ['dev', 'test'], 'eval_phase should be dev or test'
-    res_dir="./outputs/predict/pred-"+str(step) 
+    
     labels = []
-    # with open(data_dir, "r") as file:
-    #     first_flag = True
-    #     for line in file:
-    #         line = line.split("\t")
-    #         label = line[2][:-1]
-    #         if label=='label':
-    #             continue
-    #         labels.append(str(label))
-    # file.close()
+    if step==-1:
+        res_dir = "./outputs/predict/predictions.json" 
+     
+        with open(data_dir, "r") as file:
+            first_flag = True
+            for line in file:
+                line = line.split("\t")
+                label = line[2][:-1]
+                if label=='label':
+                    continue
+                labels.append(str(label))
+        file.close()
+    else:
+        res_dir="./outputs/predict/pred-"+str(step) 
 
     preds = []
     probs = [] 
@@ -82,16 +88,17 @@ def do_eval(step):
             line = json.loads(line)
             pred = line['label']
             prob = line['probs'][1]
-            label = line['ori-label']
+            if step!=-1:
+                label = line['ori-label']
+                labels.append(str(label))
             preds.append(str(pred))
-            labels.append(str(label))
             probs.append(str(prob))
     file.close()
     assert len(labels) == len(preds), "prediction result({}) doesn't match to labels({})".format(len(preds),len(labels))
     # print('data num: {}'.format(len(labels)))
     p, r, f1 = pre_recall_f1(preds, labels)
     ac = accuracy(preds, labels)
-    au = auc(probs,labels)
+    au = auc(probs, labels)
     return au, ac, p, r, f1, len(labels)
     # print("accuracy: {:.4f}, precision: {:.4f}, recall: {:.4f}, f1: {:.4f}".format(accuracy(preds, labels), p, r, f1))
 

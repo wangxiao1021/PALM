@@ -129,8 +129,7 @@ class Match(Head):
             # for pred
             else:
                 return {'logits': logits,
-                        'probs': probs,
-                        'labels': labels}
+                        'probs': probs}
         # for pairwise
         elif self._learning_strategy == 'pairwise':
             pos_score = fluid.layers.fc(
@@ -172,17 +171,22 @@ class Match(Head):
         if do_eval:
             probs = []
             logits = []
-            labels = []
             probs = rt_outputs[name+'probs']
-            labels = rt_outputs[name+'labels']
             self._preds.extend(probs.tolist())
-            self._labels.extend(labels.tolist())
+            if self._is_training:
+                labels = []
+                labels = rt_outputs[name+'labels']
+                self._labels.extend(labels.tolist())
             if self._learning_strategy == 'pointwise':
                 logits = rt_outputs[name+'logits']
                 self._preds_logits.extend(logits.tolist())
         
     def epoch_postprocess(self, post_inputs, output_dir=None, step=0):
-        preds_file = 'pred-'+str(step)
+        
+        if not self._is_training:
+            preds_file='predictions.json'
+        else:
+            preds_file = 'pred-'+str(step)
         # there is no post_inputs needed and not declared in epoch_inputs_attrs, hence no elements exist in post_inputs
         # if not self._is_training:
         if output_dir is None:
@@ -191,7 +195,10 @@ class Match(Head):
             for i in range(len(self._preds)):
                 if self._learning_strategy == 'pointwise':
                     label = 0 if self._preds[i][0] > self._preds[i][1] else 1
-                    result = {'index': i, 'label': label, 'logits': self._preds_logits[i], 'probs': self._preds[i],'ori-label': self._labels[i]}
+                    if self._is_training: 
+                        result = {'index': i, 'label': label, 'logits': self._preds_logits[i], 'probs': self._preds[i],'ori-label': self._labels[i]}
+                    else:
+                        result = {'index': i, 'label': label, 'logits': self._preds_logits[i], 'probs': self._preds[i]} 
                 elif self._learning_strategy == 'pairwise':
                     label = 0 if self._preds[i][0] < 0.5 else 1
                     result = {'index': i, 'label': label, 'probs': self._preds[i][0]}

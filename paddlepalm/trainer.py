@@ -598,9 +598,9 @@ class Trainer(object):
 
             # rt_outputs = {k:v for k,v in zip(self._fetch_names, rt_outputs)}
 
-            # task_rt_outputs = {k[len(self.name+'.'):]: v for k,v in rt_outputs.items() if k.startswith(self.name+'.')}
-            # self._task_head.batch_postprocess(task_rt_outputs)
-            self._task_head.batch_postprocess(rt_outputs, do_eval = True, name = self.name+'.') 
+            task_rt_outputs = {k[len(self.name+'.'):]: v for k,v in rt_outputs.items() if k.startswith(self.name+'.')}
+            self._task_head.batch_postprocess(task_rt_outputs)
+            # self._task_head.batch_postprocess(rt_outputs, do_eval = True, name = self.name+'.') 
 
 
             if print_steps > 0 and self._cur_train_step % print_steps == 0:
@@ -631,7 +631,7 @@ class Trainer(object):
 
         # print("ALL tasks train finished, exiting...")
         
-    def predict(self, output_dir=None, print_steps=1000):
+    def predict(self, output_dir=None, print_steps=1000, tt_step=0):
         """
         start predicting.
 
@@ -665,12 +665,12 @@ class Trainer(object):
                 sys.stdout.flush()
                 time_begin = time.time()
 
-        if self._pred_head.inputs_attrs:
+        if self._pred_head.epoch_inputs_attrs:
             reader_outputs = self._predict_reader.get_epoch_outputs()
         else:
             reader_outputs = None
 
-        results = self._pred_head.epoch_postprocess({'reader':reader_outputs}, output_dir=output_dir, step=cur_predict_step)
+        results = self._pred_head.epoch_postprocess({'reader':reader_outputs}, output_dir=output_dir, step=tt_step)
         return results 
 
     def _check_phase(self, phase):
