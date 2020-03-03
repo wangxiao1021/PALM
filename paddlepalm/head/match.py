@@ -21,7 +21,6 @@ import numpy as np
 import os
 import json
 
-
 def computeHingeLoss(pos, neg, margin):
     loss_part1 = fluid.layers.elementwise_sub(
         fluid.layers.fill_constant_batch_size_like(
@@ -62,6 +61,7 @@ class Match(Head):
     
         self._preds = []
         self._preds_logits = []
+        self._labels = []
     
     @property
     def inputs_attrs(self):
@@ -84,7 +84,8 @@ class Match(Head):
                 return {"probs": [[-1, 1], 'float32']}
             else:
                 return {"logits": [[-1, self._num_classes], 'float32'],
-                        "probs": [[-1, self._num_classes], 'float32']}
+                        "probs": [[-1, self._num_classes], 'float32'],
+                        "labels": [[-1], 'float32']}
 
     def build(self, inputs, scope_name=""):
 
@@ -121,11 +122,15 @@ class Match(Head):
                 ce_loss = fluid.layers.cross_entropy(
                     input=probs, label=labels)
                 loss = fluid.layers.mean(x=ce_loss)
-                return {'loss': loss}
+                return {'loss': loss,
+                        'logits': logits,
+                        'probs': probs,
+                        'labels': labels}
             # for pred
             else:
                 return {'logits': logits,
-                        'probs': probs}
+                        'probs': probs,
+                        'labels': labels}
         # for pairwise
         elif self._learning_strategy == 'pairwise':
             pos_score = fluid.layers.fc(
@@ -161,29 +166,38 @@ class Match(Head):
         
 
 
-    def batch_postprocess(self, rt_outputs):
+    def batch_postprocess(self, rt_outputs, do_eval=False,name=''):
         if not self._is_training:
+            do_eval = True
+        if do_eval:
             probs = []
             logits = []
-            probs = rt_outputs['probs']
+            labels = []
+            probs = rt_outputs[name+'probs']
+            labels = rt_outputs[name+'labels']
             self._preds.extend(probs.tolist())
+            self._labels.extend(labels.tolist())
             if self._learning_strategy == 'pointwise':
-                logits = rt_outputs['logits']
+                logits = rt_outputs[name+'logits']
                 self._preds_logits.extend(logits.tolist())
         
-    def epoch_postprocess(self, post_inputs, output_dir=None):
+    def epoch_postprocess(self, post_inputs, output_dir=None, step=0):
+        preds_file = 'pred-'+str(step)
         # there is no post_inputs needed and not declared in epoch_inputs_attrs, hence no elements exist in post_inputs
-        if not self._is_training:
-            if output_dir is None:
-                raise ValueError('argument output_dir not found in config. Please add it into config dict/file.')
-            with open(os.path.join(output_dir, 'predictions.json'), 'w') as writer:
-                for i in range(len(self._preds)):
-                    if self._learning_strategy == 'pointwise':
-                        label = 0 if self._preds[i][0] > self._preds[i][1] else 1
-                        result = {'index': i, 'label': label, 'logits': self._preds_logits[i], 'probs': self._preds[i]}
-                    elif self._learning_strategy == 'pairwise':
-                        label = 0 if self._preds[i][0] < 0.5 else 1
-                        result = {'index': i, 'label': label, 'probs': self._preds[i][0]}
-                    result = json.dumps(result, ensure_ascii=False)
-                    writer.write(result+'\n')
-            print('Predictions saved at '+os.path.join(output_dir, 'predictions.json'))
+        # if not self._is_training:
+        if output_dir is None:
+            raise ValueError('argument output_dir not found in config. Please add it into config dict/file.')
+        with open(os.path.join(output_dir, preds_file), 'w') as writer:
+            for i in range(len(self._preds)):
+                if self._learning_strategy == 'pointwise':
+                    label = 0 if self._preds[i][0] > self._preds[i][1] else 1
+                    result = {'index': i, 'label': label, 'logits': self._preds_logits[i], 'probs': self._preds[i],'ori-label': self._labels[i]}
+                elif self._learning_strategy == 'pairwise':
+                    label = 0 if self._preds[i][0] < 0.5 else 1
+                    result = {'index': i, 'label': label, 'probs': self._preds[i][0]}
+                result = json.dumps(result, ensure_ascii=False)
+                writer.write(result+'\n')
+        # print('Predictions saved at '+os.path.join(output_dir, preds_file))
+        self._preds = []
+        self._preds_logits = []
+        self._labels = []

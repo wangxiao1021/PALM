@@ -2,7 +2,7 @@
 
 import json
 import numpy as np
-
+from collections import Counter
 def auc(probs, labels):
     probs = np.array(probs, dtype='float32')
     labels = np.array(labels, dtype='float32')
@@ -56,7 +56,7 @@ def pre_recall_f1(preds, labels):
     return p, r, f1
 
 
-def res_evaluate(step):
+def do_eval(step):
     # if eval_phase == 'test':
     #     data_dir="./data/test.tsv"
     # elif eval_phase == 'dev':
@@ -82,17 +82,17 @@ def res_evaluate(step):
             line = json.loads(line)
             pred = line['label']
             prob = line['probs'][1]
-            label = line['ori-label'][0]
+            label = line['ori-label']
             preds.append(str(pred))
             labels.append(str(label))
             probs.append(str(prob))
     file.close()
     assert len(labels) == len(preds), "prediction result({}) doesn't match to labels({})".format(len(preds),len(labels))
-    print('data num: {}'.format(len(labels)))
+    # print('data num: {}'.format(len(labels)))
     p, r, f1 = pre_recall_f1(preds, labels)
     ac = accuracy(preds, labels)
     au = auc(probs,labels)
-    return au, ac, p, r, f1
+    return au, ac, p, r, f1, len(labels)
     # print("accuracy: {:.4f}, precision: {:.4f}, recall: {:.4f}, f1: {:.4f}".format(accuracy(preds, labels), p, r, f1))
 
 # res_evaluate()

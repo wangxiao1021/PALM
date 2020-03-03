@@ -23,6 +23,7 @@ import numpy as np
 import paddlepalm.utils.basic_helper as helper
 from paddlepalm.utils import reader_helper, saver
 from paddlepalm.distribute import gpu_dev_count, data_feeder, decode_fake
+from evaluate import do_eval
 # from paddlepalm.default_settings import *
 
 DEBUG=False
@@ -558,7 +559,7 @@ class Trainer(object):
 
         self._check_save = temp_func
             
-    def train(self, print_steps=5):
+    def train(self, print_steps=5, output_dir=''):
         """
         start training.
 
@@ -597,8 +598,9 @@ class Trainer(object):
 
             # rt_outputs = {k:v for k,v in zip(self._fetch_names, rt_outputs)}
 
-            task_rt_outputs = {k[len(self.name+'.'):]: v for k,v in rt_outputs.items() if k.startswith(self.name+'.')}
-            self._task_head.batch_postprocess(task_rt_outputs)
+            # task_rt_outputs = {k[len(self.name+'.'):]: v for k,v in rt_outputs.items() if k.startswith(self.name+'.')}
+            # self._task_head.batch_postprocess(task_rt_outputs)
+            self._task_head.batch_postprocess(rt_outputs, do_eval = True, name = self.name+'.') 
 
 
             if print_steps > 0 and self._cur_train_step % print_steps == 0:
@@ -607,12 +609,15 @@ class Trainer(object):
 
                 time_end = time.time()
                 time_cost = time_end - time_begin
-
-                print("step {}/{} (epoch {}), loss: {:.3f}, speed: {:.2f} steps/s".format(
-                       (self._cur_train_step-1) % self._steps_pur_epoch + 1 , self._steps_pur_epoch, self._cur_train_epoch,
+                self._task_head.epoch_postprocess(None, output_dir=output_dir, step=self._cur_train_step)
+                au, ac, p, r, f1, num = do_eval(self._cur_train_step)
+                print("step {}/{} (epoch {})\tauc:{:.5f}\tacc:{:.5f}\tpre:{:.5f}\trecall:{:.5f}\tf1:{:.5f}\tnum:{}\tloss: {:.3f}\tspeed: {:.2f} steps/s".format(
+                       (self._cur_train_step-1) % self._steps_pur_epoch + 1 , self._steps_pur_epoch, self._cur_train_epoch, au, ac, p, r, f1, num,
                        loss, print_steps / time_cost))
                 sys.stdout.flush()
                 time_begin = time.time() 
+                
+
                 # self._check_save()
             # if cur_task.train_finish and cur_task.cur_train_step + cur_task.cur_train_epoch * cur_task.steps_pur_epoch == cur_task.expected_train_steps:
             #     print(cur_task.name+': train finished!')
@@ -660,13 +665,13 @@ class Trainer(object):
                 sys.stdout.flush()
                 time_begin = time.time()
 
-        if self._pred_head.epoch_inputs_attrs:
+        if self._pred_head.inputs_attrs:
             reader_outputs = self._predict_reader.get_epoch_outputs()
         else:
             reader_outputs = None
 
-        results = self._pred_head.epoch_postprocess({'reader':reader_outputs}, output_dir=output_dir)
-        return results
+        results = self._pred_head.epoch_postprocess({'reader':reader_outputs}, output_dir=output_dir, step=cur_predict_step)
+        return results 
 
     def _check_phase(self, phase):
         assert phase in ['train', 'predict'], "Supported phase: train, predict,"

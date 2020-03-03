@@ -8,9 +8,9 @@ if __name__ == '__main__':
 
     # configs
     max_seqlen = 256
-    batch_size = 128
+    batch_size = 128 
     vocab_path = './pretrain/ERNIE-v1-zh-base/vocab.txt'
-    predict_file = './0222_ready/part-00000-train'
+    predict_file = './0222_ready/all-strain'
     random_seed = 1
     config = json.load(open('./pretrain/ERNIE-v1-zh-base/ernie_config.json'))
     input_dim = config['hidden_size']

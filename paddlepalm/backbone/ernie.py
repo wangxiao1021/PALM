@@ -54,7 +54,7 @@ class ERNIE(Backbone):
         self._task_emb_name = "task_embedding"
         self._emb_dtype = "float32"
         self._is_pairwise = is_pairwise
-        self._is_cos = True
+        self._is_cos = False
         self._phase=phase
         self._param_initializer = fluid.initializer.TruncatedNormal(
             scale=initializer_range)
