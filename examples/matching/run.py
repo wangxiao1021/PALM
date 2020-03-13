@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # -----------------------  for training ----------------------- 
 
     # step 1-1: create readers for training
-    match_reader = palm.reader.MatchReader(vocab_path, max_seqlen, seed=random_seed)
+    match_reader = palm.reader.MatchReader(vocab_path, max_seqlen, seed=random_seed,is_tsv=True)
     # step 1-2: load the training data
     match_reader.load_data(train_file, file_format='tsv', num_epochs=num_epochs, batch_size=batch_size)
     

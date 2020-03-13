@@ -519,7 +519,8 @@ class Trainer(object):
             save_type: a string. The type of saved model. Currently support checkpoint(ckpt) and predict model(predict), default is ckpt. If both two types are needed to save, you can set as "ckpt,predict".
 
         """
-        
+        save_steps /= gpu_dev_count
+        print('save_steps: {}'.format(save_steps))
 
         save_type = save_type.split(',')
         if 'predict' in save_type:
@@ -610,9 +611,9 @@ class Trainer(object):
                 time_end = time.time()
                 time_cost = time_end - time_begin
                 self._task_head.epoch_postprocess(None, output_dir=output_dir, step=self._cur_train_step)
-                au, ac, p, r, f1, num = do_eval(self._cur_train_step)
-                print("step {}/{} (epoch {})\tauc:{:.5f}\tacc:{:.5f}\tpre:{:.5f}\trecall:{:.5f}\tf1:{:.5f}\tnum:{}\tloss: {:.3f}\tspeed: {:.2f} steps/s".format(
-                       (self._cur_train_step-1) % self._steps_pur_epoch + 1 , self._steps_pur_epoch, self._cur_train_epoch, au, ac, p, r, f1, num,
+                #au, ac, p, r, f1, num = do_eval(self._cur_train_step)
+                print("step {}/{} (epoch {})\tloss: {:.3f}\tspeed: {:.2f} steps/s".format(
+                       (self._cur_train_step-1) % self._steps_pur_epoch + 1 , self._steps_pur_epoch, self._cur_train_epoch,
                        loss, print_steps / time_cost))
                 sys.stdout.flush()
                 time_begin = time.time() 

@@ -44,8 +44,8 @@ class MatchReader(Reader):
 
     """
     
-    def __init__(self, vocab_path, max_len, tokenizer='wordpiece', lang='en', seed=None, \
-        do_lower_case=False, learning_strategy='pointwise', phase='train', dev_count=1, print_prefix=''): 
+    def __init__(self, vocab_path, max_len, tokenizer='wordpiece', lang='en', seed=None, label_map_config=None, \
+        do_lower_case=False, learning_strategy='pointwise', phase='train', dev_count=1, print_prefix='',is_tsv=False): 
         """Create a new Reader for classification task data.
 
         Args:
@@ -68,7 +68,7 @@ class MatchReader(Reader):
         assert phase in ['train', 'predict'], "supported phase: train, predict."
 
         for_cn = lang.lower() == 'cn' or lang.lower() == 'chinese'
-
+        
         self._register.add('token_ids')
         if phase == 'train':
             if learning_strategy == 'pointwise':
@@ -88,8 +88,11 @@ class MatchReader(Reader):
                                 max_seq_len=max_len,
                                 do_lower_case=do_lower_case,
                                 for_cn=for_cn,
+                                tokenizer=tokenizer,
                                 random_seed=seed,
-                                learning_strategy = learning_strategy)
+                                learning_strategy = learning_strategy,
+                                label_map_config = label_map_config,
+                                is_tsv=is_tsv)
             
         self._reader = match_reader
         self._dev_count = dev_count

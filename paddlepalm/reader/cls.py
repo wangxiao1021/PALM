@@ -37,7 +37,7 @@ class ClassifyReader(Reader):
     """
     
     def __init__(self, vocab_path, max_len, tokenizer='wordpiece', \
-             lang='en', seed=None, do_lower_case=False, phase='train'):
+             lang='en', seed=None, do_lower_case=False, phase='train',label_map_config=None):
         """Create a new Reader for loading and processing classification task data.
 
         Args:
@@ -66,11 +66,17 @@ class ClassifyReader(Reader):
 
         self._is_training = phase == 'train'
 
+        #cls_reader = CLSReader(vocab_path,
+         #                       max_seq_len=max_len,
+          #                      do_lower_case=do_lower_case,
+           #                     for_cn=for_cn,
+            #                    random_seed=seed)
         cls_reader = CLSReader(vocab_path,
                                 max_seq_len=max_len,
                                 do_lower_case=do_lower_case,
                                 for_cn=for_cn,
-                                random_seed=seed)
+                                random_seed=seed,
+                                label_map_config=label_map_config)
         self._reader = cls_reader
 
         self._phase = phase

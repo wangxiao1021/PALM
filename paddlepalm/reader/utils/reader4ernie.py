@@ -71,7 +71,8 @@ class Reader(object):
                  is_classify=True,
                  is_regression=False,
                  for_cn=True,
-                 task_id=0):
+                 task_id=0,
+                 is_tsv=True):
         assert phase in ['train', 'predict'], "supported phase: train, predict."
         self.max_seq_len = max_seq_len
         self.tokenizer = tokenization.FullTokenizer(
@@ -87,7 +88,7 @@ class Reader(object):
         self.learning_strategy = learning_strategy
         self.for_cn = for_cn
         self.task_id = task_id
-
+        self.is_tsv=is_tsv
         np.random.seed(random_seed)
 
         self.is_classify = is_classify
@@ -100,9 +101,12 @@ class Reader(object):
         if label_map_config:
             with open(label_map_config, encoding='utf8') as f: 
                 self.label_map = json.load(f)
+                if six.PY2:
+                    self.label_map = unicode_convert(self.label_map)
         else:
             self.label_map = None
-
+        #print(self.label_map)
+        #exit()
     def get_train_progress(self):
         """Gets progress for training phase."""
         return self.current_example, self.current_epoch
@@ -353,6 +357,18 @@ class Reader(object):
                 yield i
         return f
         # return wrapper
+def unicode_convert(obj):
+    """
+    conver the object in to utf-8 encode
+    """
+    if isinstance(obj, dict):
+        return {unicode_convert(key): unicode_convert(value) for key, value in obj.iteritems()}
+    elif isinstance(obj, list):
+        return [unicode_convert(element) for element in obj]
+    elif isinstance(obj, unicode):
+        return obj.encode('utf-8')
+    else:
+        return obj
 
 class COSReader(Reader):
     def _read_tsv(self, input_file, quotechar=None):
@@ -731,6 +747,87 @@ class MaskLMReader(Reader):
 
 
 class ClassifyReader(Reader):
+    def _read_json(self, input_file):
+        """Read a json file  """
+        headers = ["text_a", "text_b", "label", "qid"]
+        Example = namedtuple('Example', headers)
+        examples = []
+        with open(input_file, "r") as fp:
+            line = fp.readline()
+            while line:
+                content = json.loads(line)
+                if six.PY2:
+                    content = unicode_convert(content)
+
+                text_a = content.get("question")
+                text_b = content.get("answer")
+                label = content.get("yesno_answer")
+                qid = content.get("id")
+
+                if label == "":
+                    label = "Yes"
+
+                if self.for_cn:
+                    text_a = text_a.replace(' ', '')
+                    text_b = text_b.replace(' ', '')
+
+                example = Example(text_a, text_b, label, qid)
+                examples.append(example)
+
+                line = fp.readline()
+        return examples
+    
+    def get_num_examples(self, input_file=None, phase='train'):
+        if input_file is None:
+            return len(self.examples.get(phase, []))
+        else:
+            # assert input_file is not None, "Argument input_file should be given or the data_generator should be created when this func is called."
+            if self.is_tsv:
+                examples = self._read_tsv(input_file)
+            else:
+                examples = self._read_json(input_file)
+            return len(examples)
+    
+    def data_generator(self,
+                       input_file,
+                       batch_size,
+                       epoch,
+                       dev_count=1,
+                       shuffle=True,
+                       phase=None):
+        """yield the data"""
+        if self.is_tsv:
+            examples = self._read_tsv(input_file)
+        else:
+            examples = self._read_json(input_file)
+        
+        if phase is None:
+            phase = 'all'
+        self.examples[phase] = examples
+
+        def wrapper():
+            """wrapper of data_generator"""
+            all_dev_batches = []
+            for epoch_index in range(epoch):
+                if phase == "train":
+                    self.current_example = 0
+                    self.current_epoch = epoch_index
+                if shuffle:
+                    np.random.shuffle(examples)
+
+                for batch_data in self._prepare_batch_data(
+                        examples, batch_size, phase=phase):
+                    if len(all_dev_batches) < dev_count:
+                        all_dev_batches.append(batch_data)
+                    if len(all_dev_batches) == dev_count:
+                        for batch in all_dev_batches:
+                            yield batch
+                        all_dev_batches = []
+        def f():
+            for i in wrapper():
+                yield i
+        return f
+        #return wrapper
     def _read_tsv(self, input_file, quotechar=None):
         """Reads a tab separated value file."""
         with open(input_file, 'r', encoding='utf8') as f:
